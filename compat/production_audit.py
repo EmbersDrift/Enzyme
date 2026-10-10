@@ -47,17 +47,20 @@ def fabric_api(version):
         if json.loads(z.read('fabric.mod.json')).get('jars'):return api
     # Old Maven API artifacts are dependency aggregators, not installable bundles.
     # Use Fabric's official full release asset, exactly what a player installs.
-    release=json.loads(urllib.request.urlopen(urllib.request.Request(
-        'https://api.github.com/repos/FabricMC/fabric-api/releases/tags/'+urllib.parse.quote(version,safe=''),
-        headers={'User-Agent':'PackModCompatibilityAudit'})).read())
-    asset=next(a for a in release['assets'] if a['name']=='fabric-api-'+version+'.jar')
-    dest=LIBRARIES/'fabric-releases'/asset['name'];dest.parent.mkdir(parents=True,exist_ok=True)
-    if not dest.exists() or dest.stat().st_size!=asset['size']:urllib.request.urlretrieve(asset['browser_download_url'],dest)
-    assert dest.stat().st_size==asset['size'],'Fabric API release download incomplete'
-    if asset.get('digest'):
-        algorithm,digest=asset['digest'].split(':',1)
-        assert hashlib.new(algorithm,dest.read_bytes()).hexdigest()==digest
-    with zipfile.ZipFile(dest) as z:assert json.loads(z.read('fabric.mod.json')).get('jars'),'Fabric API bundle modules missing'
+    filename='fabric-api-'+version+'.jar'
+    dest=LIBRARIES/'fabric-releases'/filename;dest.parent.mkdir(parents=True,exist_ok=True)
+    def valid_bundle(path):
+        try:
+            with zipfile.ZipFile(path) as z:
+                meta=json.loads(z.read('fabric.mod.json'))
+                return meta['version']==version and bool(meta.get('jars')) and z.testzip() is None
+        except (OSError,zipfile.BadZipFile,KeyError,ValueError):return False
+    if not valid_bundle(dest):
+        # Direct official asset URLs work without the unauthenticated API limit.
+        url='https://github.com/FabricMC/fabric-api/releases/download/'+urllib.parse.quote(version,safe='')+'/'+urllib.parse.quote(filename,safe='')
+        pending=dest.with_suffix('.jar.tmp');urllib.request.urlretrieve(url,pending)
+        assert valid_bundle(pending),'Fabric API release download incomplete or wrong version'
+        pending.replace(dest)
     return dest
 
 def audit(mc):
