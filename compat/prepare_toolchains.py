@@ -16,8 +16,9 @@ def prepare(major):
     if not archive.exists() or hashlib.sha256(archive.read_bytes()).hexdigest() != metadata['sha256_hash']:
         print('Downloading verified Java ' + str(major) + ' x64 JDK', flush=True)
         pending = archive.with_suffix('.zip.tmp')
-        urllib.request.urlretrieve(metadata['download_url'], pending)
-        assert pending.stat().st_size == metadata['size']
+        if not pending.exists() or hashlib.sha256(pending.read_bytes()).hexdigest() != metadata['sha256_hash']:
+            urllib.request.urlretrieve(metadata['download_url'], pending)
+        # Azul's size field is rounded; the published SHA256 is exact.
         assert hashlib.sha256(pending.read_bytes()).hexdigest() == metadata['sha256_hash']
         pending.replace(archive)
     with zipfile.ZipFile(archive) as bundle:

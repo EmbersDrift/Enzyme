@@ -121,3 +121,6 @@ tasks.register('verifyProductionJar') {
     }
 }
 tasks.named('check') { dependsOn 'verifyProductionJar' }
+tasks.named('jar', Jar) {
+    exclude '**/PackStandaloneAudit*.class', '**/PackConversionCheck*.class'
+}
