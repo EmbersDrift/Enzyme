@@ -14,6 +14,8 @@ python -X utf8 compat/build_all.py --audit --production-audit
 
 `toolchains.py` 也能识别 `JAVA_HOME_17_X64` / `JAVA_HOME_21_X64`，以及本工作区 `build/compat-jdks` 中的已准备 JDK；验证实际版本与 x64 架构后才使用。1.18.1、1.20.1 使用 Java 17；其他三个使用 Java 21。
 
+可用 `python -X utf8 compat/prepare_toolchains.py` 下载并核对 Azul 官方 SHA256，将 Java 17/21 x64 缓存到工作区以外的本机应用缓存；`toolchains.py` 会自动识别。不要将手动安装的 JDK 放在根 build 内。26.2 的 `clean` 会清理共享 build，完整验证时先完成主构建和审计，再跑五个兼容版本。
+
 仅编译和执行器检查：`python -X utf8 compat/build_all.py`。只构建一个版本：`python -X utf8 compat/build_all.py --versions 1.20.1`。交付文件与报告在 `build/compat-delivery`，每次命令的报告只记录这次指定的版本。
 
 五个版本的开发与生产审计全部通过后，运行 `python -X utf8 compat/package_delivery.py` 汇总为五版本 ZIP，附安装说明、实测清单和哈希记录；缺失版本或生产 JAR 哈希不一致时拒绝打包。

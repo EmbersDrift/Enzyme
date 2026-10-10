@@ -58,7 +58,7 @@ python -X utf8 compat/build_all.py --audit --production-audit
 构建检查真实原生转换、源包保护、选项、历史、归档恢复、ZIP、核心/模板哈希和生产 JAR。兼容构建另检查各目标格式的升降级、Java 17/21 字节码，并可执行开发和正式 Fabric 客户端的鼠标流程审计。自动检查不能覆盖全部真实材质和第三方 MOD 组合，实测步骤见 [TESTING.md](TESTING.md)。
 
 ```powershell
-python -X utf8 tools/release/audit_upload.py
+python -X utf8 tools/release/audit_upload.py --history-ref HEAD
 python -X utf8 tools/release/test_packaging.py
 cargo test --locked --manifest-path pyramid-bridge/Cargo.toml
 ```

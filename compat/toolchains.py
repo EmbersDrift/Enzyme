@@ -13,6 +13,9 @@ def java_home(major):
             candidates.append(Path(os.environ[key]))
     directory = ROOT / 'build/compat-jdks' / ('17-x64' if major == 17 else '21')
     candidates.extend(p.parent.parent for p in directory.glob('*/bin/java.exe'))
+    # Keep test JDKs outside the root Gradle build directory so clean is harmless.
+    cache = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / '.cache'))) / 'Enzyme/jdks' / str(major)
+    candidates.extend(p.parent.parent for p in cache.glob('*/bin/java.exe'))
     executable = shutil.which('java')
     if executable:
         candidates.append(Path(executable).resolve().parent.parent)

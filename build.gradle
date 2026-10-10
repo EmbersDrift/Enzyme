@@ -85,9 +85,11 @@ tasks.register('verifyNativeBundle') {
 }
 def productionJar = tasks.named('jar', Jar).flatMap { it.archiveFile }
 def expectedModVersion = project.version.toString()
+def productionLicenseFile = layout.projectDirectory.file('LICENSE').asFile
 tasks.register('verifyProductionJar') {
     dependsOn 'jar', 'verifyNativeBundle'
     inputs.file(productionJar)
+    inputs.file(productionLicenseFile)
     doLast {
         new java.util.zip.ZipFile(productionJar.get().asFile).withCloseable { zip ->
             def entries = java.util.Collections.list(zip.entries())
@@ -98,7 +100,7 @@ tasks.register('verifyProductionJar') {
             def meta = new groovy.json.JsonSlurper().parse(zip.getInputStream(zip.getEntry('fabric.mod.json')))
             if (meta.version != expectedModVersion) throw new GradleException('JAR version mismatch')
             if (meta.name != 'Enzyme' || meta.license != 'MIT' || zip.getEntry('LICENSE') == null
-                    || !java.util.Arrays.equals(zip.getInputStream(zip.getEntry('LICENSE')).bytes, file('LICENSE').bytes))
+                    || !java.util.Arrays.equals(zip.getInputStream(zip.getEntry('LICENSE')).bytes, productionLicenseFile.bytes))
                 throw new GradleException('Enzyme branding or MIT license missing from JAR')
             def en = new groovy.json.JsonSlurper().parse(zip.getInputStream(zip.getEntry('assets/packmod/lang/en_us.json')))
             def zh = new groovy.json.JsonSlurper().parse(zip.getInputStream(zip.getEntry('assets/packmod/lang/zh_cn.json')))

@@ -1,0 +1,8 @@
+# Preserve exact bytes, especially the frozen core and its hash manifests.
+# Automatic Windows line-ending conversion would invalidate that baseline.
+* -text
+*.png binary
+*.ico binary
+*.zip binary
+*.jar binary
+*.exe binary
