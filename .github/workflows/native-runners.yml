@@ -1,0 +1,63 @@
+name: Native conversion runners
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows-2025, platform: windows-x86_64}
+          - {os: windows-11-arm, platform: windows-aarch64}
+          - {os: ubuntu-24.04, platform: linux-x86_64}
+          - {os: ubuntu-24.04-arm, platform: linux-aarch64}
+          - {os: macos-15-intel, platform: macos-x86_64}
+          - {os: macos-15, platform: macos-aarch64}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: cargo test --locked --manifest-path pyramid-bridge/Cargo.toml
+      - run: python tools/release/build_native.py
+      - run: python tools/release/test_packaging.py
+      - run: python pyramid-bridge/package.py --platform ${{ matrix.platform }} --resources-dir build/native-bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pyramid-bundle-${{ matrix.platform }}
+          path: build/native-bundle/
+          if-no-files-found: error
+  mod:
+    needs: native
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - run: Add-Content -LiteralPath $env:GITHUB_ENV -Value "PACKMOD_JAVA17_HOME=$env:JAVA_HOME"
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - run: Add-Content -LiteralPath $env:GITHUB_ENV -Value "PACKMOD_JAVA21_HOME=$env:JAVA_HOME"
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '25'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pyramid-bundle-*
+          path: build/native-artifacts
+      - run: python tools/release/merge_bundles.py build/native-artifacts src/client/resources
+      - run: ./gradlew.bat build --console=plain
+      - run: python -X utf8 compat/build_all.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: enzyme-native-platforms-validated
+          path: |
+            build/libs/*.jar
+            build/compat-delivery/*.jar
+            build/compat-delivery/verification.json
+          if-no-files-found: error

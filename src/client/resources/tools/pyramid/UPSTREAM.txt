@@ -1,0 +1,4 @@
+2-Pyramid https://github.com/realLivedInCorner/2-Pyramid
+Commit 503a0859e3ab6bf09ed03f361b9335e5931a6d6d
+MIT Copyright (c) 2025-2026 2-Pyramid Studio
+Embedded headless adaptation: Embers Client.

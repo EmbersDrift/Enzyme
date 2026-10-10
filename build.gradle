@@ -1,0 +1,121 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+base { archivesName = 'enzyme-' + project.minecraft_version }
+loom {
+    splitEnvironmentSourceSets()
+    mods { "packmod" { sourceSet sourceSets.main; sourceSet sourceSets.client } }
+}
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+processResources {
+    from('LICENSE')
+    from('NOTICE.md')
+    def modVersion = project.version
+    inputs.property 'version', modVersion
+    filesMatching('fabric.mod.json') { expand version: modVersion }
+}
+tasks.withType(JavaCompile).configureEach { options.release = 25 }
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+sourceSets {
+    conversionCheck { java.srcDirs = ['tools/core'] }
+}
+sourceSets.conversionCheck.compileClasspath += sourceSets.client.output + configurations.clientCompileClasspath
+sourceSets.conversionCheck.runtimeClasspath += sourceSets.client.output + configurations.clientRuntimeClasspath
+tasks.register('conversionCheck', JavaExec) {
+    dependsOn tasks.named('conversionCheckClasses')
+    classpath = sourceSets.conversionCheck.runtimeClasspath
+    mainClass = 'com.embers.packmod.PackConversionCheck'
+    def scratchRoot = layout.buildDirectory.dir('conversion-check').get().asFile
+    def regressionPack = providers.gradleProperty('conversionRegressionPack')
+    doFirst {
+        def checkArgs = [scratchRoot.absolutePath + '-' + System.nanoTime()]
+        if (regressionPack.isPresent()) checkArgs.add(regressionPack.get())
+        setArgs(checkArgs)
+    }
+}
+// Windows x64 builds validate the actual bundled runner, not only Java compilation.
+if (System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows') && System.getProperty('os.arch') == 'amd64') {
+    tasks.named('check') { dependsOn tasks.named('conversionCheck') }
+}
+
+def baselineFile = layout.projectDirectory.file('tools/upstream/core-baseline.json').asFile
+def workspaceRoot = layout.projectDirectory.asFile.toPath()
+def frozenFiles = files(fileTree('pyramid-bridge/src'), fileTree('pyramid-bridge/tests'), fileTree('pyramid-bridge/UImage'),
+        'pyramid-bridge/Cargo.toml', 'pyramid-bridge/Cargo.lock', 'pyramid-bridge/LICENSE-2-Pyramid')
+tasks.register('verifyCoreBaseline') {
+    inputs.file(baselineFile); inputs.files(frozenFiles)
+    doLast {
+        def baseline = new groovy.json.JsonSlurper().parse(baselineFile)
+        def actual = frozenFiles.files.collectEntries { f -> [(workspaceRoot.relativize(f.toPath()).toString().replace('\\','/')):
+            java.security.MessageDigest.getInstance('SHA-256').digest(f.bytes).encodeHex().toString()] }
+        if (actual != baseline.files) throw new GradleException('Frozen conversion core changed. Review tools/upstream/LOCAL-PATCHES.md before changing the baseline.')
+        logger.lifecycle("Frozen core ${baseline.core_version}: ${actual.size()} files unchanged")
+    }
+}
+def bundleRoot = layout.projectDirectory.dir('src/client/resources/tools/pyramid').asFile
+def runnerManifests = fileTree(bundleRoot) { include '*/runner.json' }
+tasks.register('verifyNativeBundle') {
+    dependsOn 'verifyCoreBaseline'
+    inputs.dir(bundleRoot); inputs.file(baselineFile)
+    doLast {
+        def baseline = new groovy.json.JsonSlurper().parse(baselineFile)
+        def sha = { byte[] bytes -> java.security.MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString() }
+        if (runnerManifests.isEmpty()) throw new GradleException('Native runner manifests are missing; run pyramid-bridge/package.py')
+        runnerManifests.files.each { f ->
+            def m = new groovy.json.JsonSlurper().parse(f)
+            if (m.schema_version != 1 || m.core_version != baseline.core_version || m.upstream_commit != baseline.upstream_commit
+                    || m.core_baseline_sha256 != sha(baselineFile.bytes) || m.capabilities.schema_version != baseline.protocol_version
+                    || m.capabilities.core_version != baseline.core_version || m.platform != f.parentFile.name
+                    || m.capabilities.os + '-' + m.capabilities.arch != m.platform
+                    || m.executable != ('embers-pyramid' + (m.platform.startsWith('windows-') ? '.exe' : ''))
+                    || sha(new File(f.parentFile,m.executable).bytes) != m.binary_sha256
+                    || sha(new File(bundleRoot,'uimage.zip').bytes) != m.templates_sha256)
+                throw new GradleException('Inconsistent native bundle: ' + f)
+        }
+        logger.lifecycle("Verified ${runnerManifests.files.size()} native bundles")
+    }
+}
+def productionJar = tasks.named('jar', Jar).flatMap { it.archiveFile }
+def expectedModVersion = project.version.toString()
+tasks.register('verifyProductionJar') {
+    dependsOn 'jar', 'verifyNativeBundle'
+    inputs.file(productionJar)
+    doLast {
+        new java.util.zip.ZipFile(productionJar.get().asFile).withCloseable { zip ->
+            def entries = java.util.Collections.list(zip.entries())
+            if (entries.any { it.name.contains('PackStandaloneAudit') || it.name.contains('PackConversionCheck') }) throw new GradleException('Audit/test code leaked into production JAR')
+            def client = zip.getEntry('com/embers/packmod/PackModClient.class')
+            if (client == null || new String(zip.getInputStream(client).bytes, java.nio.charset.StandardCharsets.ISO_8859_1).contains('PackStandaloneAudit'))
+                throw new GradleException('Audit initialization leaked into production JAR')
+            def meta = new groovy.json.JsonSlurper().parse(zip.getInputStream(zip.getEntry('fabric.mod.json')))
+            if (meta.version != expectedModVersion) throw new GradleException('JAR version mismatch')
+            if (meta.name != 'Enzyme' || meta.license != 'MIT' || zip.getEntry('LICENSE') == null
+                    || !java.util.Arrays.equals(zip.getInputStream(zip.getEntry('LICENSE')).bytes, file('LICENSE').bytes))
+                throw new GradleException('Enzyme branding or MIT license missing from JAR')
+            def en = new groovy.json.JsonSlurper().parse(zip.getInputStream(zip.getEntry('assets/packmod/lang/en_us.json')))
+            def zh = new groovy.json.JsonSlurper().parse(zip.getInputStream(zip.getEntry('assets/packmod/lang/zh_cn.json')))
+            if (en.keySet() != zh.keySet()) throw new GradleException('Translation keys differ between English and Chinese')
+            def templates = zip.getEntry('tools/pyramid/uimage.zip')
+            def sha = { byte[] bytes -> java.security.MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString() }
+            runnerManifests.files.each { f ->
+                def m = new groovy.json.JsonSlurper().parse(f)
+                def entry = zip.getEntry('tools/pyramid/' + m.platform + '/' + m.executable)
+                if (entry == null || java.security.MessageDigest.getInstance('SHA-256').digest(zip.getInputStream(entry).bytes).encodeHex().toString() != m.binary_sha256)
+                    throw new GradleException('JAR contains stale native executable: ' + m.platform)
+                def manifest = zip.getEntry('tools/pyramid/' + m.platform + '/runner.json')
+                if (manifest == null || !java.util.Arrays.equals(zip.getInputStream(manifest).bytes, f.bytes)
+                        || templates == null || sha(zip.getInputStream(templates).bytes) != m.templates_sha256)
+                    throw new GradleException('JAR contains stale manifest or templates: ' + m.platform)
+            }
+        }
+    }
+}
+tasks.named('check') { dependsOn 'verifyProductionJar' }

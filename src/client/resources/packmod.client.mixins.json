@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "com.embers.packmod.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "PackSelectionRefresh",
+    "ScreenFadeMixin",
+    "GuiFadeMixin",
+    "TextFadeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,49 @@
+plugins { id 'net.fabricmc.fabric-loom-remap' version '1.18.2' }
+def mc = providers.gradleProperty('mc').get()
+def versions = new groovy.json.JsonSlurper().parse(file('versions.json'))
+def spec = versions[mc]
+if (spec == null) throw new GradleException('Unsupported compatibility target: ' + mc)
+version = '0.4.0'
+group = 'com.embers'
+base { archivesName = 'enzyme-' + mc }
+layout.buildDirectory = layout.projectDirectory.dir('../build/compat/' + mc)
+loom {
+    runs { client { runDir providers.gradleProperty('auditRunDir').getOrElse('../../build/compat-runs/' + mc); vmArg '-Dfabric.headless=true' } }
+}
+dependencies {
+    minecraft 'com.mojang:minecraft:' + mc
+    mappings loom.officialMojangMappings()
+    modImplementation 'net.fabricmc:fabric-loader:0.19.5'
+    modImplementation 'net.fabricmc.fabric-api:fabric-api:' + spec.fabric_api
+}
+sourceSets {
+    main { java.srcDirs = ['../build/compat-generated/' + mc + '/java']; resources.srcDirs = ['../build/compat-generated/' + mc + '/resources'] }
+    compatibilityCheck { java.srcDirs = ['checks'] }
+}
+tasks.withType(JavaCompile).configureEach { options.release = spec.java as int }
+tasks.withType(JavaExec).configureEach {
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(spec.java as int) }
+}
+java { withSourcesJar(); sourceCompatibility = JavaVersion.toVersion(spec.java); targetCompatibility = JavaVersion.toVersion(spec.java) }
+sourceSets.compatibilityCheck.compileClasspath += sourceSets.main.output + configurations.compileClasspath
+sourceSets.compatibilityCheck.runtimeClasspath += sourceSets.main.output + configurations.runtimeClasspath
+tasks.register('compatibilityCheck', JavaExec) {
+    dependsOn 'compatibilityCheckClasses'
+    classpath = sourceSets.compatibilityCheck.runtimeClasspath
+    mainClass = 'com.embers.packmod.VersionConversionCheck'
+    args layout.buildDirectory.dir('conversion-check').get().asFile.absolutePath, spec.format.toString(), mc
+}
+tasks.named('check') { dependsOn 'compatibilityCheck' }
+tasks.named('jar', Jar) {
+    exclude 'com/embers/packmod/PackStandaloneAudit*.class', 'com/embers/packmod/ProductionProbe.class'
+}
+tasks.register('probeJar', Jar) {
+    archiveFileName = 'packmod-probe-' + mc + '-named.jar'
+    from(sourceSets.main.output) { include 'com/embers/packmod/PackStandaloneAudit*.class', 'com/embers/packmod/ProductionProbe.class' }
+    from('../build/compat-generated/' + mc + '/probe-resources')
+}
+tasks.register('remapProbe', net.fabricmc.loom.task.RemapJarTask) {
+    dependsOn 'probeJar'
+    inputFile = tasks.named('probeJar', Jar).flatMap { it.archiveFile }
+    archiveFileName = 'packmod-probe-' + mc + '.jar'
+}

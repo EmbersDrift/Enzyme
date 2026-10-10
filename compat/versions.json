@@ -1,0 +1,7 @@
+{
+  "1.18.1": {"java": 17, "format": 8, "fabric_api": "0.46.6+1.18", "input_events": false, "pose_stack": true},
+  "1.20.1": {"java": 17, "format": 15, "fabric_api": "0.92.12+1.20.1", "input_events": false, "pose_stack": false},
+  "1.20.6": {"java": 21, "format": 32, "fabric_api": "0.100.8+1.20.6", "input_events": false, "pose_stack": false},
+  "1.21.8": {"java": 21, "format": 64, "fabric_api": "0.136.1+1.21.8", "input_events": false, "pose_stack": false},
+  "1.21.11": {"java": 21, "format": 75, "fabric_api": "0.141.6+1.21.11", "input_events": true, "pose_stack": false}
+}

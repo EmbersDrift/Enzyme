@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-07",
+  "origin": "EmbersClient",
+  "files": [
+    {
+      "source": "client-mod/src/client/java/com/embers/client/PackInspector.java",
+      "sha256": "4a6000bd35399c8870fd5c2a0142afe7948bb7550e4c8c68643231a3b406ea9e"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/PyramidConverter.java",
+      "sha256": "b093ee37fa843f1df3f0b7a24082dd97aa72db9d18a5753020bc9023a2d5b969"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/PackConversionFiles.java",
+      "sha256": "8f776b47f572a483becdb51faf8a1eeea6dcc2d1700d0422b8f1186d67bcf5b8"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/PackConversionManager.java",
+      "sha256": "af1b2a9ee4c982e0025f3ded3bf0c5bb2a717593396d92244404fc7c83c38d13"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/PackConversionScreen.java",
+      "sha256": "4059a376aba85ddb329490b992aa9a9ba30a2c2a3af855a79de1ec245a4ca706"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/mixin/PackSelectionRefresh.java",
+      "sha256": "801c3a8919c8daa6ccc11dfd239b9b12c7787c036d7e7c879ee06c8b6f516880"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/AeroButton.java",
+      "sha256": "3cedb63c985c09c23f600009e5b2b5cc8db9d77c746fba84ec117b633ec80304"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/AeroUi.java",
+      "sha256": "c7e5a883ccb8a573678a38c238e29a822caed4227fd3e1fb0fd72595192da7a9"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/ClientText.java",
+      "sha256": "a5b3f16a9934ab017638ba9a2ea0c4bd2f6df0bd67b0abc58f54b3d0068969f7"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/BoundedCache.java",
+      "sha256": "e01a9907d441e7aca6909a2439ef385fcea5135329678a021ddccf8e2aecb17e"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/RoundedGeometry.java",
+      "sha256": "5943300f96570a7aa27f58d3fadebac07dbaa8365e06fca83f97c35b07a1f31b"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/RoundedTextures.java",
+      "sha256": "29f39e45b089113b01d700347a85b6089be08f8cec10313c572e063d01c6ce8e"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/RoundedMaskLayout.java",
+      "sha256": "18f11f5a65b0b6db36393baeb5cdd85857f0202df23e70404d5a571b27c9e8bb"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/FadingScreen.java",
+      "sha256": "bb73910a4b0b5fe267f659637c40ccbba09bff10f1c1e74f46adb9f0aa6cb030"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/UiFade.java",
+      "sha256": "4c178d59b24564a75f7f48f7bc658121aa6883830ae958b424d5b427044d06b5"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/mixin/GuiFadeMixin.java",
+      "sha256": "e357b82eb339f9ae2891098b12c9511d8182b88ed42d004c9efe6396ca542ecd"
+    },
+    {
+      "source": "client-mod/src/client/java/com/embers/client/mixin/TextFadeMixin.java",
+      "sha256": "b4d2d5c2ff3b78bf6eeda6e8d7947adc56f237f72ffe2fbed33034927e189445"
+    }
+  ],
+  "adaptations": [
+    "Independent package, entry point, mod id, settings paths and translations.",
+    "Native pack screen check button; standalone popup styling and fade only.",
+    "Bundled native runner and Rust source; no sibling-project dependencies.",
+    "Skip standalone handlers when embersclient is present."
+  ],
+  "integrated_converter_modified": false
+}

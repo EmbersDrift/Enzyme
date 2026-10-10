@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "platform": "windows-x86_64",
+  "executable": "embers-pyramid.exe",
+  "binary_sha256": "04e75480a92d3f831feecfb20c4c8ed89dd9eda116c00280b630783a2fde8b85",
+  "core_baseline_sha256": "f25e29e947dadd09d94a7728ed05511e367e03dc920366f90a4bc40b66c44ac7",
+  "core_version": "0.2.2",
+  "upstream_commit": "503a0859e3ab6bf09ed03f361b9335e5931a6d6d",
+  "capabilities": {
+    "arch": "x86_64",
+    "core_version": "0.2.2",
+    "features": [
+      "progress",
+      "cancel",
+      "source_overlays",
+      "options",
+      "image_budget",
+      "shared_core"
+    ],
+    "os": "windows",
+    "schema_version": 1,
+    "targets": [
+      {
+        "major": 1,
+        "max_minor": 0
+      },
+      {
+        "major": 2,
+        "max_minor": 0
+      },
+      {
+        "major": 3,
+        "max_minor": 0
+      },
+      {
+        "major": 4,
+        "max_minor": 0
+      },
+      {
+        "major": 5,
+        "max_minor": 0
+      },
+      {
+        "major": 6,
+        "max_minor": 0
+      },
+      {
+        "major": 7,
+        "max_minor": 0
+      },
+      {
+        "major": 8,
+        "max_minor": 0
+      },
+      {
+        "major": 9,
+        "max_minor": 0
+      },
+      {
+        "major": 12,
+        "max_minor": 0
+      },
+      {
+        "major": 13,
+        "max_minor": 0
+      },
+      {
+        "major": 15,
+        "max_minor": 0
+      },
+      {
+        "major": 18,
+        "max_minor": 0
+      },
+      {
+        "major": 22,
+        "max_minor": 0
+      },
+      {
+        "major": 32,
+        "max_minor": 0
+      },
+      {
+        "major": 34,
+        "max_minor": 0
+      },
+      {
+        "major": 42,
+        "max_minor": 0
+      },
+      {
+        "major": 46,
+        "max_minor": 0
+      },
+      {
+        "major": 55,
+        "max_minor": 0
+      },
+      {
+        "major": 63,
+        "max_minor": 0
+      },
+      {
+        "major": 64,
+        "max_minor": 0
+      },
+      {
+        "major": 69,
+        "max_minor": 0
+      },
+      {
+        "major": 75,
+        "max_minor": 0
+      },
+      {
+        "major": 84,
+        "max_minor": 0
+      },
+      {
+        "major": 88,
+        "max_minor": 0
+      },
+      {
+        "major": 97,
+        "max_minor": 1
+      }
+    ]
+  },
+  "templates_sha256": "eec371ba2ba0d2b81f8b33a6f45111cfb071fd49cf9742d8f5c9f3e49b027fdc"
+}

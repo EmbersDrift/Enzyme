@@ -1,0 +1,57 @@
+name: Enzyme build and release
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish checked Windows x64 MODs as a GitHub Release
+        type: boolean
+        default: false
+      tag:
+        description: Release tag for version 0.4.0
+        type: string
+        default: v0.4.0
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2025
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - run: Add-Content -LiteralPath $env:GITHUB_ENV -Value "PACKMOD_JAVA17_HOME=$env:JAVA_HOME"
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - run: Add-Content -LiteralPath $env:GITHUB_ENV -Value "PACKMOD_JAVA21_HOME=$env:JAVA_HOME"
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '25'}
+      - run: python -X utf8 tools/release/audit_upload.py --history-ref HEAD
+      - run: python -X utf8 tools/release/test_packaging.py
+      - run: ./gradlew.bat clean build --console=plain
+      - run: python -X utf8 compat/build_all.py
+      - run: python -X utf8 tools/release/prepare_release.py --build-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: enzyme-six-minecraft-versions
+          path: build/github-release/
+          if-no-files-found: error
+      - name: Publish release requested through workflow_dispatch
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if ($env:RELEASE_TAG -ne 'v0.4.0') { throw 'Update project version and release documentation before publishing a new tag.' }
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'Release already exists. Use a new version; do not overwrite validated assets.' }
+          $assets = Get-ChildItem -LiteralPath build/github-release -File | ForEach-Object FullName
+          gh release create $env:RELEASE_TAG @assets --target $env:GITHUB_SHA --title 'Enzyme 0.4.0' --notes-file RELEASE-0.4.0.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
