@@ -192,7 +192,7 @@ record CompatTooltip(Component text) {
             text=text.replace('e.getId()', 'CompatEntry.id(e)')
             text=text.replace('import net.minecraft.network.chat.contents.TranslatableContents;','import net.minecraft.network.chat.TranslatableComponent;')
             text=text.replace('w.getMessage().getContents() instanceof TranslatableContents t','w.getMessage() instanceof TranslatableComponent t')
-            text=text.replace('c.getLanguageManager().setSelected("zh_cn")','c.getLanguageManager().setSelected(c.getLanguageManager().getLanguage("zh_cn"))')
+            text=text.replace('c.getLanguageManager().setSelected(LANGUAGE)','c.getLanguageManager().setSelected(c.getLanguageManager().getLanguage(LANGUAGE))')
             text=text.replace('w.getX()','w.x').replace('w.getY()','w.y')
         helper='''    private static Path outputPath(String name)throws Exception {
         try(var files=Files.list(packs)){return files.filter(Files::isRegularFile).filter(p->!p.getFileName().toString().equals(name)&&p.getFileName().toString().endsWith(name)).findFirst().orElse(packs.resolve("__audit_missing_output__"+name));}

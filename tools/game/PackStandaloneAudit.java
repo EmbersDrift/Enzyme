@@ -20,6 +20,7 @@ import java.util.zip.*;
 
 /** Isolated launch only. Staged by tools/game/run_audit.py, excluded from release JARs. */
 final class PackStandaloneAudit {
+    private static final String LANGUAGE=System.getenv().getOrDefault("PACKMOD_AUDIT_LANGUAGE","zh_cn");
     private static int stage,age,ticks;
     private static Path packs;
     private static Screen home;
@@ -88,7 +89,7 @@ final class PackStandaloneAudit {
                 try(var z=new ZipOutputStream(Files.newOutputStream(packs.resolve(NAMES[0])))){
                     z.putNextEntry(new ZipEntry("pack.mcmeta"));z.write("{\"pack\":{\"pack_format\":34,\"description\":\"Audit\"}}".getBytes());z.closeEntry();}
                 original=Files.readAllBytes(packs.resolve(NAMES[0]));for(int i=1;i<NAMES.length;i++)Files.write(packs.resolve(NAMES[i]),original);
-                c.options.languageCode="zh_cn";c.getLanguageManager().setSelected("zh_cn");
+                c.options.languageCode=LANGUAGE;c.getLanguageManager().setSelected(LANGUAGE);
                 c.getResourcePackRepository().reload();c.getResourcePackRepository().setSelected(List.of("vanilla","file/"+NAMES[0]));
                 c.options.resourcePacks.clear();c.options.resourcePacks.add("file/"+NAMES[0]);c.reloadResourcePacks();next(1);}
             case 1->{if(age<30)return;
@@ -317,7 +318,7 @@ final class PackStandaloneAudit {
         }}catch(Throwable error){PackModClient.LOGGER.error("STANDALONE AUDIT failed stage "+stage,error);c.stop();next(99);}
     }
     private static void finish(Minecraft c)throws Exception {
-        Files.writeString(c.gameDirectory.toPath().resolve("standalone-pass.txt"),"PASS: standalone launch, Chinese mouse input, first/manual checks, applied/pending protection, selective conversion, archive/refresh, overlay warnings, report details, presets, task preview, background results, history search/filter, diagnostic export, archive/restore, cancellation, failed-task retry, native incompatible prompt Yes/No/Escape/conversion navigation, clicked-pack-only selection, pending selection preservation, prompt conversion, data pack exclusion and no auto enable.\n");
+        Files.writeString(c.gameDirectory.toPath().resolve("standalone-pass.txt"),"PASS: standalone launch, localized mouse input ("+LANGUAGE+"), first/manual checks, applied/pending protection, selective conversion, archive/refresh, overlay warnings, report details, presets, task preview, background results, history search/filter, diagnostic export, archive/restore, cancellation, failed-task retry, native incompatible prompt Yes/No/Escape/conversion navigation, clicked-pack-only selection, pending selection preservation, prompt conversion, data pack exclusion and no auto enable.\n");
         PackModClient.LOGGER.info("STANDALONE AUDIT PASS");c.stop();next(99);
     }
 }
