@@ -10,4 +10,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface PackSelectionRefresh {
     @Invoker("reload") void packmod$reloadPacks();
     @Accessor("model") PackSelectionModel packmod$model();
+    @Accessor("packDir") java.nio.file.Path packmod$packDirectory();
 }

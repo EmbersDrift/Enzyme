@@ -4,9 +4,7 @@
   "compatibilityLevel": "JAVA_25",
   "client": [
     "PackSelectionRefresh",
-    "ScreenFadeMixin",
-    "GuiFadeMixin",
-    "TextFadeMixin"
+    "PackEntryConversionMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -263,7 +263,7 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 
 [[package]]
 name = "embers-pyramid"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "base64",
  "chrono",
@@ -275,6 +275,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "uuid",
  "walkdir",

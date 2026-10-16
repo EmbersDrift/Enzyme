@@ -1,0 +1,19 @@
+{
+  "application": "KyanitePackTool.exe",
+  "application_directory": "KyanitePackTool-Stable-Edition1.4.0",
+  "application_sha256": "a129c900d6c2771c5562b11c1e67e3db085e5f452a5569e4ae5608c473e297db",
+  "group": 1,
+  "icon_resource": 7,
+  "dimensions": [
+    256,
+    256
+  ],
+  "bits_per_pixel": 32,
+  "resource_encoding": "PNG",
+  "resource_sha256": "388e76a732704a8bd4447aee1ade3d87da7b51e7072b8d6e8bcdbb99c92bd2d2",
+  "source_kind": "Windows executable icon resource",
+  "export": "src/client/resources/assets/packmod/icon.png",
+  "export_sha256": "388e76a732704a8bd4447aee1ade3d87da7b51e7072b8d6e8bcdbb99c92bd2d2",
+  "transformation": "Extracted embedded PNG bytes from RT_GROUP_ICON 1 / RT_ICON 7; no resize, recoloring or compositing.",
+  "selection": "Application and icon selected by the project owner."
+}

@@ -10,6 +10,7 @@ public final class VersionConversionCheck {
     private static void check(boolean ok,String detail){if(!ok)throw new AssertionError(detail);}
     public static void main(String[] args) throws Exception {
         Path root=Path.of(args[0]).resolve("run-"+System.nanoTime()).toAbsolutePath();Files.createDirectories(root);
+        CompatibilityAdapterCheck.run(root);
         Path source=root.resolve("legacy.zip"),packs=root.resolve("packs"),tools=root.resolve("tools");Files.createDirectories(packs);
         try(var z=new ZipOutputStream(Files.newOutputStream(source))){
             for(var file:Map.of("pack.mcmeta","{\"pack\":{\"pack_format\":1,\"description\":\"Compatibility check\"}}","assets/test/marker.txt","preserve me").entrySet()){
@@ -18,6 +19,7 @@ public final class VersionConversionCheck {
         }
         byte[] original=Files.readAllBytes(source);
         var target=new PackInspector.Version(Integer.parseInt(args[1]),0);
+        MetadataStagingCheck.run(root,packs,tools,target);
         var result=PyramidConverter.convertWithReport(PackInspector.inspect(source),target,packs,tools,ignored->{});
         check(PackInspector.inspect(result.output()).supports(target),"Native output matches Minecraft "+args[2]);
         check(Arrays.equals(original,Files.readAllBytes(source)),"Source bytes preserved");

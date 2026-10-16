@@ -6,3 +6,7 @@
 *.zip binary
 *.jar binary
 *.exe binary
+# Preserve the upstream test-only compatibility file, including comment spacing.
+pyramid-bridge/src/invoke_conversion.rs whitespace=-blank-at-eol
+# Frozen upstream source is verified by hash; retain its original whitespace.
+pyramid-bridge/src/** whitespace=-blank-at-eol,-blank-at-eof

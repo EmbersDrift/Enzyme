@@ -3,7 +3,9 @@ def mc = providers.gradleProperty('mc').get()
 def versions = new groovy.json.JsonSlurper().parse(file('versions.json'))
 def spec = versions[mc]
 if (spec == null) throw new GradleException('Unsupported compatibility target: ' + mc)
-version = '0.4.0'
+def sharedProperties = new Properties()
+file('../gradle.properties').withInputStream { sharedProperties.load(it) }
+version = sharedProperties.getProperty('version')
 group = 'com.embers'
 base { archivesName = 'enzyme-' + mc }
 layout.buildDirectory = layout.projectDirectory.dir('../build/compat/' + mc)
@@ -18,7 +20,7 @@ dependencies {
 }
 sourceSets {
     main { java.srcDirs = ['../build/compat-generated/' + mc + '/java']; resources.srcDirs = ['../build/compat-generated/' + mc + '/resources'] }
-    compatibilityCheck { java.srcDirs = ['checks'] }
+    compatibilityCheck { java.srcDirs = ['checks', '../tools/regressions'] }
 }
 tasks.withType(JavaCompile).configureEach { options.release = spec.java as int }
 tasks.withType(JavaExec).configureEach {

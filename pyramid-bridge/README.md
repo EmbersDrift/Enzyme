@@ -1,7 +1,7 @@
 # 2-Pyramid shared conversion core
 
 Upstream: https://github.com/realLivedInCorner/2-Pyramid
-Pinned commit: `503a0859e3ab6bf09ed03f361b9335e5931a6d6d` (2.7.0, MIT).
+Pinned commit: `812a7358536c28772cfda3541a83e83f9a2d8825` (2.200.0, MIT).
 
 The crate exports `pyramid_core::{Request, Options, JobResult, convert, plan, capabilities}`. The CLI is a thin adapter:
 
@@ -32,3 +32,5 @@ python pyramid-bridge/package.py
 ```
 
 Packaging supports host platform detection, `--platform`, `--binary`, `CARGO_TARGET_DIR` and `CARGO_HOME`. Supported resource IDs are windows/linux/macos with x86_64/aarch64. Only the Windows x86_64 runner is currently bundled and tested locally; `.github/workflows/native-runners.yml` builds on native CI hosts when run. The known format graph is reported by `--capabilities`; only 97.1 is accepted as a nonzero minor target in this pinned snapshot.
+
+Core 0.3.0 integrates upstream A-ROM (`arom`, `natives`, `native_run`, `pack`, `bedrock_convert`). The obsolete hurray/converters execution tree is removed. Source provenance and the eleven adapted upstream files are recorded in `tools/upstream/import-manifest.json` and `LOCAL-PATCHES.md`. Repairs, active overlays and normalized pack roots feed A-ROM through an owned DirSource. ZIP output remains native; output image admission reads headers from the Pack view without materializing another image tree. Decoded caches evict within their configured shares; encoded blobs use the selected budget as an additional capacity limit. These limits are not a process RSS guarantee.

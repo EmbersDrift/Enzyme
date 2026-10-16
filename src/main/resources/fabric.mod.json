@@ -3,6 +3,7 @@
   "id": "packmod",
   "version": "${version}",
   "name": "Enzyme",
+  "icon": "assets/packmod/icon.png",
   "description": "Inspect and convert Minecraft resource packs using the 2-Pyramid core.",
   "authors": [
     "EmbersDrift",

@@ -1,4 +1,31 @@
-# 并线基线与既有差异
+# 并线基线与集成差异
+
+## 当前：MOD 0.4.1 / 核心 0.3.0
+
+2026-10-16 按用户明确要求升级至 [2-Pyramid 2.200.0](https://github.com/realLivedInCorner/2-Pyramid/tree/812a7358536c28772cfda3541a83e83f9a2d8825)，固定提交 `812a7358536c28772cfda3541a83e83f9a2d8825`，MIT。协议仍为 schema v1。旧 hurray/converters 被上游 A-ROM、natives、pack、bedrock_convert 替换，未引入桌面 UI、更新器、AI 或网络客户端。
+
+`core-baseline.json` 新冻结 183 个文件；`import-manifest.json` 记录 172 个上游文件的原路径、原 SHA256、集成 SHA256 和修改标记，其中 161 个逐字保留，11 个有集成适配。模板与上游许可逐字匹配当前提交。此次有意替换并重新建立基线，不能描述为“0.2.2 核心未改”。
+
+| 模块 | 保留或迁移的集成差异 |
+| --- | --- |
+| lib/main/runtime/reporting/integration | JSON 请求、能力/预览、取消、进度、报告、请求级互斥、原包保护和选项 |
+| native_run | 接入任务策略、取消与报告，保留上游任务顺序和并行分桶；直接 GUI 步骤也记录为任务 |
+| pack/io | 原有严格 ZIP 路径、重复条目、CRC、数量、500 MiB、取消和同步清理 |
+| pack/version_converter、overlays | A-ROM 读取经过根目录规整、图像修复和覆盖层合成的暂存树；降级清除旧范围；输出仍由原版确认兼容 |
+| pack/analysis | 已解决的版本范围提示记为 repair，其他结构警告保留 |
+| arom/view、arom/layer | 解码缓存按预算淘汰；编码 blob 另以同一预算数值限容，仍不承诺进程 RSS 硬限制 |
+| arom/serialize | ZIP 条目间检查取消 |
+| image_utils | 从请求解析 UImage，生产程序不含开发目录回退，不读取/创建桌面用户配置 |
+| natives/eraser/drop_font | 保留各命名空间字体，仅替换 legacy_unicode provider |
+| natives/surgeon/gui_surgeon_tx | 自定义/现代标题保护、源包已有 GUI 精灵优先 |
+| natives/surgeon/shader_adapt | 使用请求目标格式，避免误读尚未改写的源元数据 |
+| alpha_layers | 沿用旧上游像素规则、改为 Tx 读写并接入实际计划；此前只有注册、没有计划边的开关不会执行 |
+
+`invoke_conversion.rs` 仅以 `cfg(test)` 提供上游单元测试所需元数据壳；生产只走 A-ROM。Java 继续管理原版 UI、默认设置、历史、脱敏、选择保护和安装/归档事务。未修改上游远端或 Embers Client，未自动发布 GitHub。
+
+旧核心完整备份位于忽略的 `build/core-upgrade-0.2.2-backup`，旧测试 JAR 保留。后续同步应先审阅此表和 import-manifest，再跑 Rust/真实执行器回归，明确升级后才建立新基线；不能仅刷新哈希掩盖意外修改。验证使用 `gradlew verifyCoreBaseline verifyNativeBundle`，重编使用 `python tools/release/build_native.py`。
+
+## 历史：0.2.2 基线及原有差异
 
 上游提交：`503a0859e3ab6bf09ed03f361b9335e5931a6d6d`，仓库 realLivedInCorner/2-Pyramid。
 冻结版本：核心与 CLI 0.2.2，协议 schema v1。MOD 从 0.3.0 起独立编号。

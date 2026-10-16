@@ -1,0 +1,19 @@
+// Optional isolated 26.2 audit probe; no audit code enters the production source sets.
+allprojects {
+    afterEvaluate {
+        if (sourceSets.findByName('client') != null) {
+            def probe = sourceSets.create('productionProbe') {
+                java.srcDirs = ['tools/game', 'build/root-production-probe/java']
+                java.include 'PackStandaloneAudit.java', 'com/embers/packmod/ProductionProbe.java'
+                resources.srcDirs = ['build/root-production-probe/resources']
+            }
+            probe.compileClasspath += sourceSets.client.output + configurations.clientCompileClasspath
+            tasks.register('rootProbeJar', Jar) {
+                dependsOn tasks.named(probe.classesTaskName)
+                archiveFileName = 'packmod-probe-26.2.jar'
+                destinationDirectory = layout.buildDirectory.dir('root-production-probe')
+                from(probe.output)
+            }
+        }
+    }
+}

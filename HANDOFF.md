@@ -1,6 +1,36 @@
-# 开发交接：MOD 0.4.0 / 核心 0.2.2
+# 开发交接：MOD 0.5.1 / 核心 0.3.0
 
-本版仅调整 Java MOD、打包工具、验证及文档。Git 基线提交为 `46bcee4`，项目以 Enzyme 名称发布到 GitHub，许可为 MIT。上游转换器不自动同步或推送。`tools/upstream/core-baseline.json` 冻结 207 个核心文件；`verifyCoreBaseline` 同时检查文件集合与 SHA256。既有本地核心补丁清单见 [LOCAL-PATCHES.md](tools/upstream/LOCAL-PATCHES.md)。后续与作者并线时先审查该清单，再决定是否调整基线；不能用刷新哈希掩盖意外修改。
+0.5.1 使用实际 1.20.1 资源包进行全版本回归。`PackCompatibility` 在核心输出安装前补充新版物品定义及纹理图集；`PackShaderCompatibility` 修复新版 GLSL 导入、统一变量块及雾效接口。所有改动位于 MOD 层，183 个冻结核心文件保持不变。新增警告/修复会合入持久结果与界面报告。
+
+本次测试入口为 `tools/regressions/test_real_pack.py`，三预设文件检查加 `--clients` 正式客户端启用检查；26.2 新增独立生产探针 `tools/game/production-probe.init.gradle`，不再只依赖开发客户端证据。测试细节见 [TESTING.md](TESTING.md)。以下为此前版本记录，旧交付包与证据仍保留。
+
+0.5.1 最终本地结果：13 个成品的 39 次真实资源包转换、13 次正式客户端资源重载和 UI 检查通过。独立检查 1,488 个实际模型谓词案例、2,808 次自定义命名空间文件字节保留；报告计数按最终 SHA-256 差异去重。全部源码修复在 Java 层，核心二进制 SHA-256 保持 `d95ec2499a312568ee2b9f3c558f491795ab50d0861f39a631fa41995dce051a`。汇总在 `build/real-pack-audit/summary.json`，最终打包目录为 `build/github-release/0.5.1`。
+
+按用户最新指定，MOD 图标使用 `D:\KyanitePackTool-Stable-Edition1.4.0\KyanitePackTool.exe` 内的蓝色 K 图标，替换先前上游仓库中的线框图标。读取 EXE 的 Windows 图标资源组 1 / 图像资源 7，直接提取原始 256×256 PNG，没有启动该程序，也没有缩放或改色。图标为 `src/client/resources/assets/packmod/icon.png`，来源和哈希在 `tools/upstream/desktop-icon.json`，NOTICE 已同步来源。
+
+蓝色 K 图标版的 13 个 JAR 交付于 `build/kyanite-icon-delivery/0.5.0/enzyme-0.5.0-kyanite-icon-all-versions.zip`，图标和构建核对证据见同目录 `icon-validation.json`。此前线框图标包保留在 `build/icon-delivery/0.5.0`。本次只修改图标和来源文字，不重跑客户端 UI 审计，不覆盖旧生产审计的 JAR 哈希，也不替换 `build/github-release/0.5.0` 的旧交付。后续正式打包须为新 JAR 更新对应审计证据，不能沿用旧哈希。
+
+2026-10-16 新增六版本 NeoForge 适配，配置和构建入口在 `neoforge/`，维护边界见 [NeoForge 说明](neoforge/README.md)。与现有七版本 Fabric 共用 Java 业务层及原生执行器，本次未修改 183 个冻结核心文件。1.20.1 使用官方早期 NeoForge、legacy ModDevGradle、SRG 重映射及 refmap；1.18.1 仅支持 Fabric。不要交付 devlibs 或测试探针。
+
+公共 `ConversionTarget` 从实际运行的 Minecraft 读取资源格式，核对 JAR 内 `assets/packmod/conversion-target.json` 的 Minecraft、major、minor 及实际选择目标；不一致时停止注册转换入口并记录错误。`tools/release/verify_targets.py` 另用官方客户端 SHA1 和内置 `version.json` 核对全部配置。输出文件名可能使用格式族的版本范围，不能据此认定目标串版。
+
+0.5.0 本地打包入口为 `tools/release/prepare_release.py`，汇总 7 个 Fabric 和 6 个 NeoForge 成品及经过路径过滤的验证记录。NeoForge 客户端使用官方安装器建立 build 内的隔离实例，加载成品与独立探针，并检查成品代码实际来源。运行时目标证据为审计目录内的 `conversion-target-check.json`。本次未自动推送或更新 GitHub Release。以下保留此前核心升级和 UI 修复记录。
+
+2026-10-16 按用户明确要求升级上游至 2-Pyramid 2.200.0、提交 `812a7358536c28772cfda3541a83e83f9a2d8825`。使用 A-ROM/natives 新引擎，移除旧 hurray/converters 树；原有 MOD 选项、取消、进度、严格 ZIP、预算、字体/标题/精灵保护和报告已迁移。详见 [LOCAL-PATCHES.md](tools/upstream/LOCAL-PATCHES.md) 及逐文件 [import-manifest.json](tools/upstream/import-manifest.json)。本次有意升级核心并建立 183 文件的新基线，后续仍禁止无审查刷新哈希。
+
+0.4.1 本地验证：175 项 Rust 测试通过、6 项外部样本测试跳过；原客户包七目标保守模式像素/CRC/源保护回归通过；六个兼容版本完成最终 JAR 的正式客户端全流程与清晰度检查，26.2 完成隔离客户端及最终 JAR 检查。新交付目录为 `build/github-release/0.4.1`，旧 0.4.0 JAR 与核心备份保留。透明层修复现会实际进入计划，对照原像素应使用保守预设。
+
+2026-10-16 新增 Fabric 1.21.10 独立构建：Java 21、资源包格式 69.0、Fabric API 0.138.4+1.21.10。共用现有 MOD 业务代码和冻结执行器，仅增加版本配置；保留该版本的原版 Button/Util API，同时启用新的输入事件适配。编译、原生升降级、正式 JAR 的完整客户端操作及六页面清晰度检查通过；细节见 [FABRIC-1.21.10.md](FABRIC-1.21.10.md)。含主构建 26.2 共支持七个 Minecraft 版本，已发布 v0.4.0 的六版本资产尚未更新。
+
+2026-10-15 新增原版不兼容确认框的转换入口，见 [INCOMPATIBLE-PROMPT.md](INCOMPATIBLE-PROMPT.md)。保留原版 Yes/No/Esc，仅选择转换时通过 No 回调返回原资源包页面，再检测并勾选目标；不提前选择或启用原包。
+
+2026-10-14 的原版 UI 与独立转换设置调整见 [VANILLA-UI.md](VANILLA-UI.md)。使用原版按钮及背景、停用 UI 淡入 Mixin；新默认开启生成、shader、透明层修复与覆盖层合成，保留已保存的配置。删除类任务仍需单独启用。
+
+2026-10-11 客户反馈自查的未发布 MOD 变更见 [CUSTOMER-SELF-CHECK.md](CUSTOMER-SELF-CHECK.md)：元数据字符串控制字符仅在暂存副本转义；上游合金资源生成改变已有文件时增加待检查警告。核心保持冻结，本地测试 JAR 与已发布 v0.4.0 不同。
+
+同日旧版 UI 的背景模糊修复见 [UI-BLUR-FIX.md](UI-BLUR-FIX.md)。兼容生成器覆盖各版本的原版背景入口，避免在面板/文字绘制后再次模糊；正式客户端审计增加真实截图的文字清晰度检查。
+
+项目以 Enzyme 名称发布，许可为 MIT；本次 0.4.1 为本地交付，未自动推送或更新 GitHub Release。`tools/upstream/core-baseline.json` 冻结 183 个核心文件；`verifyCoreBaseline` 同时检查文件集合与 SHA256。Git 旧本地基线 `46bcee4` 及 0.2.2 的差异保留为历史记录。与作者并线时先审查当前来源清单和本地适配，再明确决定是否建立新基线。
 
 ## 模块职责
 
@@ -20,14 +50,14 @@
 | `package_support.py` / `tools/release` | 二进制架构识别、清单哈希与六平台产物合并验证 |
 | `pyramid-bridge/src/lib.rs` | 可复用 `pyramid_core` API：`convert`、`plan`、`capabilities` |
 | `pyramid-bridge/src/main.rs` | 薄 CLI，JSON 请求/结果、能力和预览查询 |
-| `pyramid-bridge/src/runtime.rs` / `overlays.rs` | 请求选项、任务事件、取消、图像预算与源覆盖层合成 |
+| `pyramid-bridge/src/runtime.rs` / `overlays.rs` / `integration.rs` | 请求选项、任务事件、取消、图像预算、源覆盖层合成与 A-ROM 桥接 |
 | `tools/core` / `tools/game` | 实际执行器检查与隔离游戏交互审计，均不进入生产 JAR |
-| `compat/versions.json` / `compat/generate.py` | 五个旧版 Fabric 的目标格式与 Minecraft API 适配；共用主目录 Java 业务代码，生成文件只写入 build |
+| `compat/versions.json` / `compat/generate.py` | 六个旧版 Fabric 的目标格式与 Minecraft API 适配；共用主目录 Java 业务代码，生成文件只写入 build |
 | `compat/build_all.py` / `compat/production_audit.py` | 逐版本编译、执行器升降级与 JAR 检查、正式 Fabric 启动审计及交付记录 |
 
-## 五个版本的兼容层
+## 六个版本的兼容层
 
-新增 1.18.1 / 1.20.1（Java 17）和 1.20.6 / 1.21.8 / 1.21.11（Java 21），资源包目标格式分别为 8 / 15 / 32 / 64 / 75，均调用同一份 0.2.2 执行器。这些格式已存在于冻结核心的能力列表，没有新增转换规则。
+兼容 1.18.1 / 1.20.1（Java 17）和 1.20.6 / 1.21.8 / 1.21.10 / 1.21.11（Java 21），资源包目标格式分别为 8 / 15 / 32 / 64 / 69 / 75，均调用同一份 0.3.0 执行器。26.2 使用格式 88。新增 Minecraft 适配不单独修改核心转换规则。
 
 26.2 的源文件仍在 `src/client/java`。`compat/generate.py` 适配 UI API、输入签名、Toast、文本、资源包标识与 Mixin；每次生成验证核心文件集合及哈希。请修改生成器或公共源文件，不直接修改 `build/compat-generated`。1.18.1 的 Fabric API mod ID 是 `fabric`，其余版本为 `fabric-api`。旧版背景使用兼容绘制，不包含 26.2 的渲染提取与淡入 Mixin。
 
@@ -45,7 +75,7 @@
 
 `archive_failed` 表示输出已安装但归档未完成；批次计数分别统计转换和归档，不把有效输出算作转换失败。历史重试只接受无输出的 failed/cancelled/interrupted 记录，使用日志原选项；检查原包根目录、符号链接、签名与应用状态，再通过原有转换流程执行。诊断导出及报告读取也在 worker 上进行，界面与环境版本信息仍在客户端线程取得。
 
-Java 暂存 ZIP 不做压缩，减少原生解压前的重复压缩；最终输出仍由原生打包。Rust 解压失败和取消都会等待写入线程退出。贴图写入队列容量 2，贴图缓存有预算；`commit_all` 传播异步写入和 panic。图像预算仅为准入估算，不能宣称硬 RSS 限制。
+Java 暂存 ZIP 不做压缩。原生预检在拥有的解压目录规整根目录、合成覆盖层并修复伪装 PNG，A-ROM 随后从该目录读取。Tx 层在内存中提交，最终直接序列化 ZIP；输出图像准入读取 Pack 视图的编码头，不再落地整棵图像目录。解码缓存按预算淘汰，编码 blob 使用选定预算数值作为额外容量上限。解压失败和取消仍等待写入线程退出，任务和 ZIP 条目边界检查取消。预算不能宣称为硬 RSS 限制。
 
 0.2.1 修复全包像素累计引发的预算误拒绝：按最大单图 × 每像素16字节 × 并发数，加四分之一预算的缓存预留估算峰值。先降低实际转换线程池大小，再判断单线程是否超预算。输入和输出检查写入 `image_budget_checks`，记录图像数量、最大图路径与尺寸、预算、峰值、请求/有效线程数和是否通过。任务的 `worker_threads` 记录实际 Rayon pool 大小。不要重新把全包所有图片当成同时驻留的工作集。
 
@@ -59,7 +89,7 @@ Java 暂存 ZIP 不做压缩，减少原生解压前的重复压缩；最终输�
 
 覆盖层合成根据 `pack_format` 或 `min_format` 选择源版本，支持旧格式范围和现代 major/minor 范围。后面的有效层覆盖前面，合成后移除覆盖层目录与声明，再跑原迁移管线。重复/嵌套覆盖层目录、非法路径与倒序范围拒绝。输出只面向一个版本，多版本语义保留在原包中。
 
-默认保守选项跳过 `generate_*`、`reverse_generate_*`、大部分 `delete_*` 和 shader 适配。`delete_font_folder` 实际是本地字体保留/legacy_unicode 兼容任务，不能误跳过。启用删除后仍报告模型删除；默认保留模型或 shader 时提示检查。上游的正常路径改名、GUI 切分和必需格式调整继续执行。
+新默认开启 `generate_*`、shader 适配、透明层修复和覆盖层合成；仍跳过 `reverse_generate_*`、大部分 `delete_*`。保守预设另关闭生成、shader 与透明层修复。`delete_font_folder` 实际是本地字体保留/legacy_unicode 兼容任务，不能误跳过。启用删除后仍报告模型删除；保留模型或 shader 时提示检查。生成改变已有合金资源时仍要求检查并保留原包。上游的正常路径改名、GUI 切分和必需格式调整继续执行。
 
 CLI 能力列表只声明已知迁移节点；非零 minor 仅接受固定快照支持的 97.1。26.2 目标为 88.0。新增游戏格式必须更新迁移规则和检查，不能只改能力列表。
 

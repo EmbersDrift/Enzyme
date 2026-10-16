@@ -33,11 +33,11 @@ final class PackReportScreen extends FadingScreen {
         lines=paragraphs.stream().flatMap(p->font.split(Component.literal(p),pw()-32).stream()).toList();
         offset=Math.clamp(offset,0,Math.max(0,lines.size()-visible()));
         int third=(pw()-40)/3, bottom=y()+ph()-29;
-        addRenderableWidget(new AeroButton(x()+14,bottom,third,20,"Open Conversion Reports",b->Util.getPlatform().openPath(job)));
-        var export=addRenderableWidget(new AeroButton(x()+20+third,bottom,third,20,"Export Diagnostics",b->{exporting=true;message=ReportText.text("working");rebuild();PackConversionManager.exportDiagnostics(job,result->{exporting=false;message=result;rebuild();});}));
+        addRenderableWidget(new NativeButton(x()+14,bottom,third,20,"Open Conversion Reports",b->Util.getPlatform().openPath(job)));
+        var export=addRenderableWidget(new NativeButton(x()+20+third,bottom,third,20,"Export Diagnostics",b->{exporting=true;message=ReportText.text("working");rebuild();PackConversionManager.exportDiagnostics(job,result->{exporting=false;message=result;rebuild();});}));
         export.active=!exporting;
         export.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("packmod.pack_conversion.diagnostic_help")));
-        addRenderableWidget(new AeroButton(x()+26+third*2,bottom,third,20,"Done",b->onClose()));
+        addRenderableWidget(new NativeButton(x()+26+third*2,bottom,third,20,"Done",b->onClose()));
     }
     private void rebuild(){clearWidgets();init();}
     private List<String> describe(JsonObject document){
@@ -79,11 +79,13 @@ final class PackReportScreen extends FadingScreen {
     }
     private static String value(JsonObject d,String key){return d.has(key)&&!d.get(key).isJsonNull()?d.get(key).getAsString():"";}
     @Override public boolean mouseScrolled(double mx,double my,double dx,double dy){if(isClosing())return true;offset=Math.clamp(offset-(int)Math.signum(dy)*3,0,Math.max(0,lines.size()-visible()));return true;}
-    @Override public void extractBackground(GuiGraphicsExtractor g,int mx,int my,float delta){if(minecraft.level==null)extractPanorama(g,delta);AeroUi.modalBackdrop(g,width,height,x(),y(),pw(),ph());AeroUi.glass(g,x(),y(),pw(),ph(),13);}
+    @Override public void extractBackground(GuiGraphicsExtractor g,int mx,int my,float delta) {
+        super.extractBackground(g, mx, my, delta);
+    }
     @Override public void extractRenderState(GuiGraphicsExtractor g,int mx,int my,float delta){
-        g.text(font,getTitle(),x()+14,y()+13,AeroUi.WHITE,false);
-        g.text(font,ReportText.text("report_scroll",Math.min(lines.size(),offset+1),lines.size()),x()+14,y()+30,AeroUi.MUTED,false);
-        for(int i=offset;i<Math.min(lines.size(),offset+visible());i++)g.text(font,lines.get(i),x()+14,y()+49+(i-offset)*12,AeroUi.WHITE,false);
+        g.centeredText(font, getTitle(), width / 2, y()+13, VanillaUi.WHITE);
+        g.text(font,ReportText.text("report_scroll",Math.min(lines.size(),offset+1),lines.size()),x()+14,y()+30,VanillaUi.MUTED,false);
+        for(int i=offset;i<Math.min(lines.size(),offset+visible());i++)g.text(font,lines.get(i),x()+14,y()+49+(i-offset)*12,VanillaUi.WHITE,false);
         g.text(font,font.plainSubstrByWidth(message,pw()-28),x()+14,y()+ph()-48,0xFFFFD080,false);super.extractRenderState(g,mx,my,delta);
     }
     @Override public void onClose(){transitionTo(parent);}

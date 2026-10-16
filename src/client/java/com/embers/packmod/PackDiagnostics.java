@@ -10,7 +10,7 @@ import java.util.zip.*;
 
 /** Explicit local export: only allowlisted text reports, never pack contents. */
 final class PackDiagnostics {
-    private static final List<String> FILES = List.of("job.json", "request.json", "result.json", "capabilities.json", "bundle-manifest.json", "conversion.log", "progress.jsonl", "capabilities.log");
+    private static final List<String> FILES = List.of("job.json", "request.json", "result.json", "staging-repairs.json", "capabilities.json", "bundle-manifest.json", "conversion.log", "progress.jsonl", "capabilities.log");
     private static final long MAX_FILE = 16L * 1024 * 1024, MAX_TOTAL = 32L * 1024 * 1024;
     private static final Pattern SECRET = Pattern.compile("(?i)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|authorization|secret|token)");
     static Path export(Path job, Path destination, JsonObject environment) throws IOException {

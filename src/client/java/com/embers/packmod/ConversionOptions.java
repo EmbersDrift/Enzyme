@@ -6,7 +6,8 @@ import java.nio.file.Path;
 
 record ConversionOptions(boolean allowDestructive, boolean generateMissing, boolean adaptShaders,
                          boolean fixAlphaLayers, boolean flattenOverlays, int workers, int memoryBudgetMb) {
-    static ConversionOptions defaults() { return new ConversionOptions(false, false, false, false, true, 2, 256); }
+    static ConversionOptions defaults() { return new ConversionOptions(false, true, true, true, true, 2, 256); }
+    static ConversionOptions conservative() { return new ConversionOptions(false, false, false, false, true, 2, 256); }
     static ConversionOptions complete() { return new ConversionOptions(true, true, true, true, true, 2, 256); }
     ConversionOptions {
         if (workers < 1 || workers > 4 || memoryBudgetMb < 128 || memoryBudgetMb > 1024)

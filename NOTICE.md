@@ -4,11 +4,18 @@ Enzyme is distributed under the MIT license in [LICENSE](LICENSE).
 
 The conversion core and UImage templates derive from
 [realLivedInCorner/2-Pyramid](https://github.com/realLivedInCorner/2-Pyramid),
-version 2.7.0, commit `503a0859e3ab6bf09ed03f361b9335e5931a6d6d`.
+version 2.200.0, commit `812a7358536c28772cfda3541a83e83f9a2d8825`.
 Copyright (c) 2025-2026 2-Pyramid Studio. The original MIT notice remains in
 `pyramid-bridge/LICENSE-2-Pyramid` and the bundled third-party notices.
-The frozen local core is version 0.2.2; its existing differences from upstream
+The frozen local core is version 0.3.0; its integration differences from upstream
 are documented in `tools/upstream/LOCAL-PATCHES.md`.
+
+The MOD icon was supplied by the project owner from
+`KyanitePackTool-Stable-Edition1.4.0/KyanitePackTool.exe`. The embedded 256x256
+Windows icon PNG was extracted without resizing or recoloring to
+`assets/packmod/icon.png`. Source and export hashes are recorded in
+`tools/upstream/desktop-icon.json`. This artwork retains its original
+attribution and licensing; Enzyme's project license does not relicense it.
 
 The Java client layer was extracted from Embers Client and adapted for this
 standalone project. Its provenance is recorded in `EXTRACTION.json`.

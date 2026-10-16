@@ -15,7 +15,7 @@ final class ConversionOptionsScreen extends FadingScreen {
     private int y() { return (height - Math.min(302, height - 16)) / 2; }
     private void changed(ConversionOptions next) { options = next; clearWidgets(); init(); }
     private void toggle(int row, String label, boolean value, Runnable action, String help) {
-        var button = addRenderableWidget(new AeroButton(x()+14, y()+36+row*25, Math.min(412,width-48), 21,
+        var button = addRenderableWidget(new NativeButton(x()+14, y()+36+row*25, Math.min(412,width-48), 21,
                 label + (value ? " [ON]" : " [OFF]"), b -> action.run()));
         button.setTooltip(Tooltip.create(Component.translatable("packmod.pack_conversion.option_help." + help)));
     }
@@ -27,24 +27,23 @@ final class ConversionOptionsScreen extends FadingScreen {
         toggle(3,"Fix Alpha Layers",o.fixAlphaLayers(),()->changed(new ConversionOptions(o.allowDestructive(),o.generateMissing(),o.adaptShaders(),!o.fixAlphaLayers(),o.flattenOverlays(),o.workers(),o.memoryBudgetMb())),"alpha");
         toggle(4,"Flatten Source Overlays",o.flattenOverlays(),()->changed(new ConversionOptions(o.allowDestructive(),o.generateMissing(),o.adaptShaders(),o.fixAlphaLayers(),!o.flattenOverlays(),o.workers(),o.memoryBudgetMb())),"overlays");
         int w=Math.min(412,width-48), half=(w-6)/2;
-        var workers=addRenderableWidget(new AeroButton(x()+14,y()+164,half,21,"",b->changed(new ConversionOptions(o.allowDestructive(),o.generateMissing(),o.adaptShaders(),o.fixAlphaLayers(),o.flattenOverlays(),o.workers()%4+1,o.memoryBudgetMb()))));
+        var workers=addRenderableWidget(new NativeButton(x()+14,y()+164,half,21,"",b->changed(new ConversionOptions(o.allowDestructive(),o.generateMissing(),o.adaptShaders(),o.fixAlphaLayers(),o.flattenOverlays(),o.workers()%4+1,o.memoryBudgetMb()))));
         workers.setMessage(Component.translatable("packmod.pack_conversion.workers",o.workers()));
-        var memory=addRenderableWidget(new AeroButton(x()+20+half,y()+164,half,21,"",b->changed(new ConversionOptions(o.allowDestructive(),o.generateMissing(),o.adaptShaders(),o.fixAlphaLayers(),o.flattenOverlays(),o.workers(),o.memoryBudgetMb()>=1024?128:o.memoryBudgetMb()*2))));
+        var memory=addRenderableWidget(new NativeButton(x()+20+half,y()+164,half,21,"",b->changed(new ConversionOptions(o.allowDestructive(),o.generateMissing(),o.adaptShaders(),o.fixAlphaLayers(),o.flattenOverlays(),o.workers(),o.memoryBudgetMb()>=1024?128:o.memoryBudgetMb()*2))));
         memory.setMessage(Component.translatable("packmod.pack_conversion.image_budget",o.memoryBudgetMb()));
         memory.setTooltip(Tooltip.create(Component.translatable("packmod.pack_conversion.option_help.budget")));
-        addRenderableWidget(new AeroButton(x()+14,y()+187,half,21,"Conservative Preset",b->changed(ConversionOptions.defaults())));
-        addRenderableWidget(new AeroButton(x()+20+half,y()+187,half,21,"Complete Preset",b->changed(ConversionOptions.complete())));
-        addRenderableWidget(new AeroButton(x()+14,y()+242,half,21,"Restore Defaults",b->changed(ConversionOptions.defaults())));
-        addRenderableWidget(new AeroButton(x()+20+half,y()+242,half,21,"Save",b->{ PackConversionManager.options(options); onClose(); }));
+        addRenderableWidget(new NativeButton(x()+14,y()+187,half,21,"Conservative Preset",b->changed(ConversionOptions.conservative())));
+        addRenderableWidget(new NativeButton(x()+20+half,y()+187,half,21,"Complete Preset",b->changed(ConversionOptions.complete())));
+        addRenderableWidget(new NativeButton(x()+14,y()+242,half,21,"Restore Defaults",b->changed(ConversionOptions.defaults())));
+        addRenderableWidget(new NativeButton(x()+20+half,y()+242,half,21,"Save",b->{ PackConversionManager.options(options); onClose(); }));
     }
     @Override public void extractBackground(GuiGraphicsExtractor g,int mx,int my,float delta) {
-        if (minecraft.level==null) extractPanorama(g,delta); AeroUi.modalBackdrop(g,width,height,x(),y(),Math.min(440,width-20),Math.min(302,height-16));
-        AeroUi.glass(g,x(),y(),Math.min(440,width-20),Math.min(302,height-16),13);
+        super.extractBackground(g, mx, my, delta);
     }
     @Override public void extractRenderState(GuiGraphicsExtractor g,int mx,int my,float delta) {
-        g.text(font,getTitle(),x()+14,y()+13,AeroUi.WHITE,false);
-        g.text(font,Component.translatable("packmod.pack_conversion.options_note"),x()+14,y()+212,AeroUi.MUTED,false);
-        g.text(font,Component.translatable("packmod.pack_conversion.options_preview"),x()+14,y()+225,AeroUi.MUTED,false);
+        g.centeredText(font, getTitle(), width / 2, y()+13, VanillaUi.WHITE);
+        g.text(font,Component.translatable("packmod.pack_conversion.options_note"),x()+14,y()+212,VanillaUi.MUTED,false);
+        g.text(font,Component.translatable("packmod.pack_conversion.options_preview"),x()+14,y()+225,VanillaUi.MUTED,false);
         super.extractRenderState(g,mx,my,delta);
     }
     @Override public void onClose() { transitionTo(parent); }

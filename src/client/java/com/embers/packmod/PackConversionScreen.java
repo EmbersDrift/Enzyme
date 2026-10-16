@@ -28,7 +28,8 @@ final class PackConversionScreen extends FadingScreen {
     private final java.util.Map<Path,Path> reportJobs = new java.util.HashMap<>();
     private Phase phase = Phase.CHECKING;
     private Component status = Component.translatable("packmod.pack_conversion.checking");
-    private AeroButton convertButton;
+    private NativeButton convertButton;
+    private NativeButton previewButton;
     private int scroll;
     private boolean hasOutput;
     private Component taskStatus=Component.empty();
@@ -52,37 +53,40 @@ final class PackConversionScreen extends FadingScreen {
         for (int index = scroll; index < Math.min(rows.size(), scroll + visibleRows()); index++)
             addRenderableWidget(new PackRow(x + 13, listTop() + (index - scroll) * 34, pw() - 35, rows.get(index)));
         convertButton = null;
+        previewButton = null;
         if (phase == Phase.CONVERTING) {
-            addRenderableWidget(new AeroButton(x + 13, bottom, half, 20, "Continue in Background", b -> onClose()));
-            addRenderableWidget(new AeroButton(x + 19 + half, bottom, half, 20, "Cancel Conversion", b -> { PackConversionManager.cancel(); b.active=false; status=Component.translatable("packmod.pack_conversion.cancelling"); }));
+            addRenderableWidget(new NativeButton(x + 13, bottom, half, 20, "Continue in Background", b -> onClose()));
+            addRenderableWidget(new NativeButton(x + 19 + half, bottom, half, 20, "Cancel Conversion", b -> { PackConversionManager.cancel(); b.active=false; status=Component.translatable("packmod.pack_conversion.cancelling"); }));
         } else if (phase == Phase.SELECTING && rows.stream().anyMatch(Row::eligible)) {
-            addRenderableWidget(new AeroButton(x + 13, bottom - 29, quarter, 18, "Select All", b -> {
+            addRenderableWidget(new NativeButton(x + 13, bottom - 29, quarter, 18, "Select All", b -> {
                 rows.stream().filter(Row::eligible).map(Row::path).forEach(selected::add); updateConvertButton();
             }));
-            addRenderableWidget(new AeroButton(x + 19 + quarter, bottom - 29, quarter, 18, "Clear Selection", b -> { selected.clear(); updateConvertButton(); }));
-            addRenderableWidget(new AeroButton(x + 25 + quarter*2, bottom - 29, quarter, 18, "Conversion Options", b -> minecraft.gui.setScreen(new ConversionOptionsScreen(this))));
-            var preview=addRenderableWidget(new AeroButton(x+31+quarter*3,bottom-29,quarter,18,"Preview Conversion",b->minecraft.gui.setScreen(new ConversionPlanScreen(this,
+            addRenderableWidget(new NativeButton(x + 19 + quarter, bottom - 29, quarter, 18, "Clear Selection", b -> { selected.clear(); updateConvertButton(); }));
+            addRenderableWidget(new NativeButton(x + 25 + quarter*2, bottom - 29, quarter, 18, "Conversion Settings", b -> minecraft.gui.setScreen(new ConversionOptionsScreen(this))));
+            previewButton=addRenderableWidget(new NativeButton(x+31+quarter*3,bottom-29,quarter,18,"Preview Conversion",b->minecraft.gui.setScreen(new ConversionPlanScreen(this,
                     rows.stream().filter(Row::eligible).filter(row->selected.contains(row.path)).map(Row::candidate).toList()))));
-            preview.active=!selected.isEmpty();
-            convertButton = addRenderableWidget(new AeroButton(x + 13, bottom, half, 20, "Convert Selected", b -> start()));
+            previewButton.active=!selected.isEmpty();
+            convertButton = addRenderableWidget(new NativeButton(x + 13, bottom, half, 20, "Convert Selected", b -> start()));
             updateConvertButton();
-            addRenderableWidget(new AeroButton(x + 19 + half, bottom, half, 20, "Cancel", b -> onClose()));
+            addRenderableWidget(new NativeButton(x + 19 + half, bottom, half, 20, "Cancel", b -> onClose()));
         } else if (phase == Phase.FINISHED) {
             int third = (pw() - 38) / 3;
-            var folder = addRenderableWidget(new AeroButton(x + 13, bottom, third, 20, "Open Pack Folder", b -> Util.getPlatform().openPath(PackConversionManager.packDirectory())));
+            var folder = addRenderableWidget(new NativeButton(x + 13, bottom, third, 20, "Open Pack Folder", b -> Util.getPlatform().openPath(PackConversionManager.packDirectory())));
             folder.active = hasOutput;
-            addRenderableWidget(new AeroButton(x+13,bottom-29,pw()-26,18,"Conversion History",b->minecraft.gui.setScreen(new PackHistoryScreen(this))));
-            addRenderableWidget(new AeroButton(x + 19 + third, bottom, third, 20, "Open Conversion Reports", b -> Util.getPlatform().openPath(PackConversionManager.reportDirectory())));
-            addRenderableWidget(new AeroButton(x + 25 + third * 2, bottom, third, 20, "Done", b -> onClose()));
+            addRenderableWidget(new NativeButton(x+13,bottom-29,half,20,"Conversion History",b->minecraft.gui.setScreen(new PackHistoryScreen(this))));
+            addRenderableWidget(new NativeButton(x+19+half,bottom-29,half,20,"Conversion Settings",b->minecraft.gui.setScreen(new ConversionOptionsScreen(this))));
+            addRenderableWidget(new NativeButton(x + 19 + third, bottom, third, 20, "Open Conversion Reports", b -> Util.getPlatform().openPath(PackConversionManager.reportDirectory())));
+            addRenderableWidget(new NativeButton(x + 25 + third * 2, bottom, third, 20, "Done", b -> onClose()));
         } else {
-            addRenderableWidget(new AeroButton(x + 13, bottom, pw() - 26, 20, phase == Phase.CHECKING ? "Cancel" : "Done", b -> onClose()));
+            if (phase != Phase.CHECKING)
+                addRenderableWidget(new NativeButton(x+13,bottom-29,pw()-26,20,"Conversion Settings",b->minecraft.gui.setScreen(new ConversionOptionsScreen(this))));
+            addRenderableWidget(new NativeButton(x + 13, bottom, pw() - 26, 20, phase == Phase.CHECKING ? "Cancel" : "Done", b -> onClose()));
         }
     }
 
     private void updateConvertButton() {
         if (convertButton == null) return;
-        children().stream().filter(AeroButton.class::isInstance).map(AeroButton.class::cast)
-                .filter(b->b.getMessage().getString().equals("Preview Conversion")).forEach(b->b.active=!selected.isEmpty());
+        if (previewButton != null) previewButton.active = !selected.isEmpty();
         convertButton.setMessage(Component.translatable("packmod.pack_conversion.convert_selected", selected.size()));
         boolean runner;
         try { runner=NativePlatform.current().bundled(); }catch(Exception error){runner=false;}
@@ -99,6 +103,20 @@ final class PackConversionScreen extends FadingScreen {
         phase = Phase.CONVERTING;
         status = Component.translatable("packmod.pack_conversion.preparing");
         rebuild(); PackConversionManager.convert(batch, this, parent);
+    }
+
+    void selectOnly(Path path) {
+        if (path == null) return;
+        selected.clear();
+        for (int i=0; i<rows.size(); i++) {
+            Row row=rows.get(i);
+            if (row.eligible && row.path.equals(path)) {
+                selected.add(path);
+                scroll=Math.min(i, Math.max(0, rows.size()-visibleRows()));
+                break;
+            }
+        }
+        rebuild();
     }
 
     void detected(PackConversionManager.Report report, Set<String> protectedIds) {
@@ -182,32 +200,30 @@ final class PackConversionScreen extends FadingScreen {
         }
         return super.keyPressed(event);
     }
-    @Override public void extractBackground(GuiGraphicsExtractor g, int mx, int my, float delta) {
-        if (minecraft.level == null) extractPanorama(g, delta);
-        AeroUi.modalBackdrop(g, width, height, left(), top(), pw(), ph()); AeroUi.glass(g, left(), top(), pw(), ph(), 13);
+    @Override public void extractBackground(GuiGraphicsExtractor g,int mx,int my,float delta) {
+        super.extractBackground(g, mx, my, delta);
     }
     @Override public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float delta) {
         int x = left() + 13, y = top();
-        g.text(font, getTitle(), x, y + 12, AeroUi.WHITE, false);
-        g.fill(x, y + 29, left() + pw() - 13, y + 30, 0x60FFFFFF);
+        g.centeredText(font, getTitle(), width / 2, y + 12, VanillaUi.WHITE);
         boolean allCompatible = rows.isEmpty() && phase == Phase.SELECTING;
-        if (!allCompatible) g.text(font, font.plainSubstrByWidth(status.getString(), pw() - 26), x, y + 40, AeroUi.WHITE, false);
-        g.text(font, Component.translatable("packmod.pack_conversion.current", net.minecraft.SharedConstants.getCurrentVersion().name(), PackConversionManager.target().toString()), x, y + (allCompatible ? 43 : 55), AeroUi.MUTED, false);
+        if (!allCompatible) g.text(font, font.plainSubstrByWidth(status.getString(), pw() - 26), x, y + 40, VanillaUi.WHITE, false);
+        g.text(font, Component.translatable("packmod.pack_conversion.current", net.minecraft.SharedConstants.getCurrentVersion().name(), PackConversionManager.target().toString()), x, y + (allCompatible ? 43 : 55), VanillaUi.MUTED, false);
         if (!allCompatible) {
             String note = phase==Phase.CONVERTING ? taskStatus.getString() : Component.translatable("packmod.pack_conversion.batch_note").getString();
-            g.text(font, font.plainSubstrByWidth(note, pw() - 26), x, y + 71, AeroUi.MUTED, false);
+            g.text(font, font.plainSubstrByWidth(note, pw() - 26), x, y + 71, VanillaUi.MUTED, false);
         }
         if (phase == Phase.CHECKING || (rows.isEmpty() && phase == Phase.SELECTING))
-            g.centeredText(font, status, width / 2, listTop() + 20, phase == Phase.CHECKING ? AeroUi.WHITE : 0xFF72DFA3);
+            g.centeredText(font, status, width / 2, listTop() + 20, phase == Phase.CHECKING ? VanillaUi.WHITE : 0xFF72DFA3);
         if (rows.size() > visibleRows()) {
             int track = visibleRows() * 34 - 3, thumb = Math.max(12, track * visibleRows() / rows.size());
             int offset = (track - thumb) * scroll / (rows.size() - visibleRows());
-            AeroUi.rounded(g, left() + pw() - 16, listTop(), 3, track, 1, 0x35FFFFFF);
-            AeroUi.rounded(g, left() + pw() - 16, listTop() + offset, 3, thumb, 1, 0xC0FFFFFF);
+            g.fill(left()+pw()-16,listTop(),left()+pw()-13,listTop()+track,0xFF000000);
+            g.fill(left()+pw()-16,listTop()+offset,left()+pw()-13,listTop()+offset+thumb,0xFF808080);
         }
         if (phase == Phase.SELECTING && !rows.isEmpty()) {
             String count = Component.translatable("packmod.pack_conversion.selected", selected.size()).getString();
-            g.text(font, count, left() + pw() - 14 - font.width(count), y + ph() - 78, AeroUi.MUTED, false);
+            g.text(font, count, left() + pw() - 14 - font.width(count), y + ph() - 78, VanillaUi.MUTED, false);
         }
         super.extractRenderState(g, mx, my, delta);
     }
@@ -220,15 +236,21 @@ final class PackConversionScreen extends FadingScreen {
             setTooltip(Tooltip.create(Component.literal(getMessage().getString() + "\n" + row.tooltip)));
         }
         @Override protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mx, int my, float delta) {
-            AeroUi.rounded(g, getX(), getY(), width, height, 5, isHoveredOrFocused() && active ? 0x90506579 : 0x50232D3C);
-            int color = row.error ? 0xFFFFA3A3 : row.warning ? 0xFFFFD080 : active ? AeroUi.WHITE : AeroUi.MUTED;
+            g.fill(getX(), getY(), getX()+width, getY()+height, 0x60000000);
+            if (isHoveredOrFocused() && active) {
+                g.fill(getX(),getY(),getX()+width,getY()+1,0xFFFFFFFF);
+                g.fill(getX(),getY()+height-1,getX()+width,getY()+height,0xFFFFFFFF);
+                g.fill(getX(),getY(),getX()+1,getY()+height,0xFFFFFFFF);
+                g.fill(getX()+width-1,getY(),getX()+width,getY()+height,0xFFFFFFFF);
+            }
+            int color = row.error ? 0xFFFFA3A3 : row.warning ? 0xFFFFD080 : active ? VanillaUi.WHITE : VanillaUi.MUTED;
             int textX = getX() + 24;
             if (row.candidate != null && phase == Phase.SELECTING) {
-                AeroUi.rounded(g, getX() + 6, getY() + 9, 12, 12, 3, selected.contains(row.path) ? 0xFF5594DE : 0x50334255);
-                AeroUi.roundedOutline(g, getX() + 6, getY() + 9, 12, 12, 3, active ? 0xB0FFFFFF : 0x40778899);
+                g.fill(getX()+6,getY()+9,getX()+18,getY()+21,active?0xFFFFFFFF:0xFF808080);
+                g.fill(getX()+7,getY()+10,getX()+17,getY()+20,0xFF000000);
                 if (selected.contains(row.path)) {
-                    g.fill(getX() + 9, getY() + 14, getX() + 11, getY() + 17, AeroUi.WHITE);
-                    g.fill(getX() + 11, getY() + 12, getX() + 14, getY() + 15, AeroUi.WHITE);
+                    g.fill(getX() + 9, getY() + 14, getX() + 11, getY() + 17, VanillaUi.WHITE);
+                    g.fill(getX() + 11, getY() + 12, getX() + 14, getY() + 15, VanillaUi.WHITE);
                 }
             }
             g.text(font, font.plainSubstrByWidth(getMessage().getString(), width - 31), textX, getY() + 4, color, false);

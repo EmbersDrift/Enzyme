@@ -12,7 +12,9 @@ public final class PackConversionCheck {
     public static void main(String[] args) throws Exception {
         checkReportValidation();
         Path work = Path.of(args[0]).toAbsolutePath(); Files.createDirectories(work);
+        CompatibilityAdapterCheck.run(work);
         Path packs = work.resolve("packs"), tools = work.resolve("tools"); Files.createDirectories(packs);
+        MetadataStagingCheck.run(work, packs, tools, TARGET);
         if (args.length > 1) {
             Path regression = Path.of(args[1]);
             if (Files.isDirectory(regression)) {
@@ -236,7 +238,8 @@ public final class PackConversionCheck {
     }
     private static void checkRegressionPack(Path source, Path packs, Path tools) throws Exception {
         String before = PackConversionFiles.signature(source);
-        var converted = PyramidConverter.convertWithReport(PackInspector.inspect(source), TARGET, packs, tools, ignored -> {});
+        var converted = PyramidConverter.convertWithReport(PackInspector.inspect(source), TARGET, packs, tools,
+                ConversionOptions.conservative(), new ConversionControl(), ignored -> {});
         check(PackInspector.inspect(converted.output()).supports(TARGET), "User regression pack reaches the target version through the Java adapter");
         int preserved = 0;
         try (var src = new java.util.zip.ZipFile(source.toFile()); var dst = new java.util.zip.ZipFile(converted.output().toFile())) {

@@ -8,8 +8,11 @@ import argparse, hashlib, json, re, shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSIONS = json.loads((ROOT/'compat/versions.json').read_text())
+MOD_VERSION = next(line.split('=', 1)[1].strip() for line in (ROOT/'gradle.properties').read_text().splitlines() if line.startswith('version='))
 
-def generate(mc, audit=False, probe=False):
+def generate(mc, audit=False, probe=False, output_dir=None):
+    if (ROOT/'src/client/java/com/embers/packmod/PackStandaloneAudit.java').exists():
+        raise RuntimeError('The root game audit has temporarily staged shared sources; wait for it to restore them before generating adapters.')
     config = VERSIONS[mc]
     baseline = json.loads((ROOT/'tools/upstream/core-baseline.json').read_text())
     frozen = {p.relative_to(ROOT).as_posix() for directory in ('src', 'tests', 'UImage') for p in (ROOT/'pyramid-bridge'/directory).rglob('*') if p.is_file()}
@@ -19,15 +22,19 @@ def generate(mc, audit=False, probe=False):
     for path, digest in baseline['files'].items():
         if hashlib.sha256((ROOT/path).read_bytes()).hexdigest() != digest:
             raise ValueError('Frozen core changed: '+path)
-    output = ROOT/'build/compat-generated'/mc
+    output = Path(output_dir) if output_dir is not None else ROOT/'build/compat-generated'/mc
     java = output/'java/com/embers/packmod'
     java.mkdir(parents=True, exist_ok=True)
+    for old in ('AeroButton.java','AeroUi.java'):
+        (java/old).unlink(missing_ok=True)
     events = config['input_events']; pose = config['pose_stack']
     graphics_type = 'PoseStack' if pose else 'GuiGraphics'
     graphics_import = 'com.mojang.blaze3d.vertex.PoseStack' if pose else 'net.minecraft.client.gui.GuiGraphics'
     for source in (ROOT/'src/client/java/com/embers/packmod').glob('*.java'):
         if source.stem in {'RoundedTextures', 'RoundedMaskLayout', 'UiFade'}: continue
         text = source.read_text(encoding='utf-8')
+        if mc != '1.21.11':
+            text = text.replace('extends Button.Plain', 'extends Button')
         text = text.replace('import net.minecraft.client.gui.GuiGraphicsExtractor;', 'import '+graphics_import+';')
         text = text.replace('import net.minecraft.resources.Identifier;', '')
         text = text.replace('GuiGraphicsExtractor', 'CompatGraphics').replace('Math.clamp(', 'CompatMath.clamp(')
@@ -40,10 +47,16 @@ def generate(mc, audit=False, probe=False):
         if mc in {'1.18.1','1.20.1'}:text=text.replace('SystemToastId.PERIODIC_NOTIFICATION', 'SystemToastIds.PACK_COPY_FAILURE')
         if mc.startswith('1.21'):
             text = text.replace('SharedConstants.getCurrentVersion().getName()', 'SharedConstants.getCurrentVersion().name()')
-        text = text.replace('var format = SharedConstants.getCurrentVersion().packVersion(PackType.CLIENT_RESOURCES);\n        target = new PackInspector.Version(format.major(), format.minor());',
-                            'target = new PackInspector.Version('+str(config['format'])+', 0);')
+        if source.stem == 'ConversionTarget' and mc in {'1.18.1','1.20.1','1.20.6','1.21.8'}:
+            method = 'packVersion' if mc == '1.21.8' else 'getPackVersion'
+            text = text.replace('packVersion(PackType.CLIENT_RESOURCES)', method+'(PackType.CLIENT_RESOURCES)')
+            text = text.replace('new PackInspector.Version(format.major(), format.minor())', 'new PackInspector.Version(format, 0)')
+            if mc == '1.18.1':
+                text = text.replace('import net.minecraft.server.packs.PackType;', 'import com.mojang.bridge.game.PackType;')
+                text = text.replace('PackType.CLIENT_RESOURCES', 'PackType.RESOURCE')
         text = text.replace('extractPanorama(g,delta)', 'compatPanorama(g,delta)').replace('extractPanorama(g, delta)', 'compatPanorama(g, delta)')
         text = text.replace('super.extractRenderState(g,', 'super.render(raw,')
+        text = text.replace('super.extractBackground(g,', 'super.compatBackground(g,')
         # Keep graphics-independent screen bodies, adapt only Minecraft entry signatures.
         text = re.sub(r'public void extractBackground\(CompatGraphics g,\s*int mx,\s*int my,\s*float delta\)\s*\{',
                       'protected void compatBackground(CompatGraphics g,int mx,int my,float delta){', text)
@@ -54,6 +67,12 @@ def generate(mc, audit=False, probe=False):
         text = text.replace('import org.joml.Matrix3x2fStack;', '')
         text = text.replace('Matrix3x2fStack pose = graphics.pose();', 'var pose = graphics.pose();')
         text = text.replace('if(RoundedTextures.draw(graphics,x,y,width,height,radius,color,outline))return;', '')
+        if source.stem == 'PackConversionPrompt' and mc in {'1.18.1','1.20.1','1.20.6'}:
+            text = text.replace('import net.minecraft.client.gui.layouts.LinearLayout;', '')
+            text = text.replace('addButtons(LinearLayout buttons)', 'addButtons(int y)')
+            text = text.replace('super.addButtons(buttons);', 'super.addButtons(y);')
+            text = text.replace('layout.addChild(conversionButton(0, 0));',
+                'addExitButton(conversionButton((width-Math.min(200,width-40))/2, y+24));')
         if not events:
             text = text.replace('import net.minecraft.client.input.KeyEvent;', '').replace('import net.minecraft.client.input.MouseButtonEvent;', '')
             text = text.replace('keyPressed(KeyEvent event)', 'keyPressed(int key,int scanCode,int modifiers)').replace('event.key()', 'key')
@@ -67,6 +86,22 @@ def generate(mc, audit=False, probe=False):
             text = re.sub(r'mouseScrolled\(double (\w+),\s*double (\w+),\s*double dx,\s*double dy\)', r'mouseScrolled(double \1,double \2,double dy)', text)
             text = text.replace('super.mouseScrolled(x, y, dx, dy)', 'super.mouseScrolled(x,y,dy)')
         if pose:
+            text=text.replace('.packmod$packDirectory()', '.packmod$packDirectoryFile().toPath()')
+            if source.stem == 'NativeButton':
+                text=text.replace(', DEFAULT_NARRATION);', ');')
+                # 1.18's two texture halves only support buttons up to 200x20.
+                # Keep the native renderer and center standard-size controls in
+                # wider layout slots rather than sampling outside widgets.png.
+                text=text.replace('super(x, y, width, height, VanillaUi.ui(label)',
+                    'super(x + Math.max(0,width-200)/2, y, Math.min(width,200), Math.min(height,20), VanillaUi.ui(label)')
+                text=text.replace('\n}', '''
+    private CompatTooltip compatTooltip;
+    public void setTooltip(CompatTooltip value) { compatTooltip=value; }
+    @Override public void renderButton(PoseStack raw,int mx,int my,float delta) {
+        super.renderButton(raw,mx,my,delta);
+        if(isHovered&&compatTooltip!=null) compatTooltip.render(raw,mx,my);
+    }
+}''').replace('import net.minecraft.client.gui.components.Button;', 'import net.minecraft.client.gui.components.Button;\nimport com.mojang.blaze3d.vertex.PoseStack;')
             text=text.replace('List.of("fabricloader","fabric-api")', 'List.of("fabricloader","fabric")')
             text=text.replace('client.getResourcePackDirectory().toAbsolutePath()', 'client.getResourcePackDirectory().toPath().toAbsolutePath()')
             text=text.replace('map(PackResources::packId)', 'map(p -> "file/"+p.getName())')
@@ -78,12 +113,21 @@ def generate(mc, audit=False, probe=False):
             text = text.replace('Component.literal(', 'CompatText.literal(').replace('Component.translatable(', 'CompatText.translatable(')
             text = text.replace('SystemToastId.PERIODIC_NOTIFICATION', 'SystemToastIds.PACK_COPY_FAILURE')
             # ScreenEvents accepts any AbstractWidget; use our button instead of newer builder API.
-            text = re.sub(r'net.minecraft.client.gui.components.Button.builder\(\s*AeroUi.ui\("([^"]+)"\),\s*button -> ([^\n]+?)\)\s*\.bounds\(([^;]+?)\)\.build\(\)',
-                          lambda m: 'new AeroButton('+m[3]+',"'+m[1]+'",button -> '+m[2]+')',text)
+            text = re.sub(r'net.minecraft.client.gui.components.Button.builder\(\s*VanillaUi.ui\("([^"]+)"\),\s*button -> ([^\n]+?)\)\s*\.bounds\(([^;]+?)\)\.build\(\)',
+                          lambda m: 'new NativeButton('+m[3]+',"'+m[1]+'",button -> '+m[2]+')',text)
             text = text.replace('input.setHint(CompatText.translatable("packmod.pack_conversion.search_history"));','')
         (java/source.name).write_text(text, encoding='utf-8')
     mixins = java/'mixin';mixins.mkdir(exist_ok=True)
     shutil.copyfile(ROOT/'src/client/java/com/embers/packmod/mixin/PackSelectionRefresh.java',mixins/'PackSelectionRefresh.java')
+    if pose:
+        refresh=mixins/'PackSelectionRefresh.java'
+        refresh.write_text(refresh.read_text().replace('@Accessor("packDir") java.nio.file.Path packmod$packDirectory();',
+            '@Accessor("packDir") java.io.File packmod$packDirectoryFile();'),encoding='utf-8')
+    entry_mixin=(ROOT/'src/client/java/com/embers/packmod/mixin/PackEntryConversionMixin.java').read_text(encoding='utf-8')
+    if pose:
+        entry_mixin=entry_mixin.replace('method = "handlePackSelection"', 'method = "mouseClicked"')
+        entry_mixin=entry_mixin.replace('pack.getId()', '((EntryPack)pack).packmod$pack().getId()')
+    (mixins/'PackEntryConversionMixin.java').write_text(entry_mixin,encoding='utf-8')
     (mixins/'ScreenWidgets.java').write_text('''package com.embers.packmod.mixin;
 import net.minecraft.client.gui.screens.Screen; import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.components.Renderable; import net.minecraft.client.gui.narration.NarratableEntry;
@@ -104,7 +148,14 @@ import org.spongepowered.asm.mixin.Mixin; import org.spongepowered.asm.mixin.gen
     (java/'CompatGraphics.java').write_text(graphics_adapter(graphics_type, graphics_import, mc),encoding='utf-8')
     if pose:
         (java/'CompatText.java').write_text('package com.embers.packmod; import net.minecraft.network.chat.*; final class CompatText {static Component literal(String s){return new TextComponent(s);} static Component translatable(String s,Object... a){return new TranslatableComponent(s,a);}}')
-        (java/'CompatTooltip.java').write_text('package com.embers.packmod; import net.minecraft.network.chat.Component; record CompatTooltip(Component text) {static CompatTooltip create(Component c){return new CompatTooltip(c);}}')
+        (java/'CompatTooltip.java').write_text('''package com.embers.packmod; import net.minecraft.network.chat.Component;
+record CompatTooltip(Component text) {
+ static CompatTooltip create(Component c){return new CompatTooltip(c);}
+ void render(com.mojang.blaze3d.vertex.PoseStack raw,int mx,int my){
+  var client=net.minecraft.client.Minecraft.getInstance();
+  if(client.screen!=null)client.screen.renderTooltip(raw,client.font.split(text,Math.min(260,client.getWindow().getGuiScaledWidth()-24)),mx,my);
+ }
+}''')
     if audit:
         text=(ROOT/'tools/game/PackStandaloneAudit.java').read_text(encoding='utf-8')
         text=text.replace('.gui.setScreen(','.setScreen(').replace('.gui.screen()','.screen').replace('.gui.overlay()','.getOverlay()')
@@ -124,18 +175,25 @@ import org.spongepowered.asm.mixin.Mixin; import org.spongepowered.asm.mixin.gen
         if not events:
             text=text.replace('import net.minecraft.client.input.MouseButtonEvent;','').replace('import net.minecraft.client.input.MouseButtonInfo;','')
             start=text.index('        var e=new MouseButtonEvent(');end=text.index('\n    }',start)
-            text=text[:start]+'''        double mx=w.getX()+w.getWidth()/2.0,my=w.getY()+w.getHeight()/2.0;
-        check(s.mouseClicked(mx,my,0),"mouse input consumed: "+w.getMessage().getString());s.mouseReleased(mx,my,0);'''+text[end:]
+            text=text[:start]+'''        check(s.mouseClicked(mx,my,0)||net.minecraft.client.Minecraft.getInstance().screen!=s,"mouse action handled");s.mouseReleased(mx,my,0);'''+text[end:]
+            text=text.replace('screen.keyPressed(new net.minecraft.client.input.KeyEvent(256,0,0))','screen.keyPressed(256,0,0)')
+        if mc in {'1.18.1','1.20.1','1.20.6'}:
+            text=text.replace('return list.getRowTop(index);', '''var mappings=net.fabricmc.loader.api.FabricLoader.getInstance().getMappingResolver();
+        String method=mappings.mapMethodName("intermediary","net.minecraft.class_350","method_25337","(I)I");
+        var row=net.minecraft.client.gui.components.AbstractSelectionList.class.getDeclaredMethod(method,int.class);
+        row.setAccessible(true);return (int)row.invoke(list,index);''')
         if pose:
+            text=text.replace('p.packId().equals("file/"+realOutput.getFileName())','p.getName().equals(realOutput.getFileName().toString())')
+            text=text.replace('Component.empty()', 'CompatText.literal("")')
             text=text.replace('Component.translatable(', 'CompatText.translatable(').replace('c.options.guiScale().set(2)','c.options.guiScale=2')
             text=text.replace('packs=c.getResourcePackDirectory();','packs=c.getResourcePackDirectory().toPath();')
-            text=text.replace('new PackSelectionScreen(c.getResourcePackRepository(),repo->c.setScreen(home),packs,','new PackSelectionScreen(home,c.getResourcePackRepository(),repo->c.setScreen(home),packs.toFile(),')
+            text=text.replace('new PackSelectionScreen(c.getResourcePackRepository(),repo->c.setScreen(home),directory,','new PackSelectionScreen(home,c.getResourcePackRepository(),repo->c.setScreen(home),directory.toFile(),')
             text=text.replace('p.packId().equals("file/"+NAMES[0])','p.getName().equals(NAMES[0])')
             text=text.replace('e.getId()', 'CompatEntry.id(e)')
             text=text.replace('import net.minecraft.network.chat.contents.TranslatableContents;','import net.minecraft.network.chat.TranslatableComponent;')
             text=text.replace('w.getMessage().getContents() instanceof TranslatableContents t','w.getMessage() instanceof TranslatableComponent t')
             text=text.replace('c.getLanguageManager().setSelected("zh_cn")','c.getLanguageManager().setSelected(c.getLanguageManager().getLanguage("zh_cn"))')
-            text=text.replace('w.getX()','((CompatWidget)w).getX()').replace('w.getY()','((CompatWidget)w).getY()')
+            text=text.replace('w.getX()','w.x').replace('w.getY()','w.y')
         helper='''    private static Path outputPath(String name)throws Exception {
         try(var files=Files.list(packs)){return files.filter(Files::isRegularFile).filter(p->!p.getFileName().toString().equals(name)&&p.getFileName().toString().endsWith(name)).findFirst().orElse(packs.resolve("__audit_missing_output__"+name));}
     }
@@ -149,22 +207,41 @@ import org.spongepowered.asm.mixin.Mixin; import org.spongepowered.asm.mixin.gen
     if probe:
         (java/'ProductionProbe.java').write_text('package com.embers.packmod; public final class ProductionProbe implements net.fabricmc.api.ClientModInitializer { public void onInitializeClient(){PackStandaloneAudit.init();}}')
         directory=output/'probe-resources';directory.mkdir(exist_ok=True)
-        (directory/'fabric.mod.json').write_text(json.dumps(dict(schemaVersion=1,id='packmod_probe',version='1.0.0',environment='client',entrypoints=dict(client=['com.embers.packmod.ProductionProbe']),depends=dict(packmod='>=0.4.0'))))
+        (directory/'fabric.mod.json').write_text(json.dumps(dict(schemaVersion=1,id='packmod_probe',version='1.0.0',environment='client',entrypoints=dict(client=['com.embers.packmod.ProductionProbe']),depends=dict(packmod='>='+MOD_VERSION))))
     else:(java/'ProductionProbe.java').unlink(missing_ok=True)
     # Add neutral version-appropriate backdrop helpers; legacy versions do not have state-extraction hooks.
     fading=java/'FadingScreen.java';text=fading.read_text()
-    helper='protected void compatBackground(CompatGraphics g,int x,int y,float delta){}\nprotected void compatPanorama(CompatGraphics g,float delta){g.fill(0,0,width,height,0xFF162331);}\n'
-    fading.write_text(text.replace('    private static final long OPEN_DURATION', '    '+helper+'    private static final long OPEN_DURATION'),encoding='utf-8')
+    # Each adapted screen draws its backdrop at the start of render. In 1.20.6,
+    # Screen.render calls renderBackground again before drawing widgets: vanilla
+    # blur then processes the panel/text already submitted by our screen. Own the
+    # background hooks so only the explicit compatBackground pass draws anything.
+    if pose:
+        native_background='super.renderBackground(g.raw,0);'
+        background_hooks='''@Override public void renderBackground(PoseStack raw) {}
+@Override public void renderBackground(PoseStack raw,int color) {}
+'''
+        text=text.replace('import net.minecraft.client.gui.screens.Screen;', 'import net.minecraft.client.gui.screens.Screen;\nimport com.mojang.blaze3d.vertex.PoseStack;')
+    elif mc=='1.20.1':
+        native_background='super.renderBackground(g.raw);'
+        background_hooks='@Override public void renderBackground(GuiGraphics raw) {}\n'
+        text=text.replace('import net.minecraft.client.gui.screens.Screen;', 'import net.minecraft.client.gui.screens.Screen;\nimport net.minecraft.client.gui.GuiGraphics;')
+    else:
+        native_background='super.renderBackground(g.raw,x,y,delta);'
+        background_hooks='@Override public void renderBackground(GuiGraphics raw,int mx,int my,float delta) {}\n'
+        text=text.replace('import net.minecraft.client.gui.screens.Screen;', 'import net.minecraft.client.gui.screens.Screen;\nimport net.minecraft.client.gui.GuiGraphics;')
+    helper=background_hooks+'protected void compatBackground(CompatGraphics g,int x,int y,float delta){'+native_background+'}\n'
+    fading.write_text(text.replace('    protected FadingScreen', '    '+helper+'    protected FadingScreen'),encoding='utf-8')
     resources=output/'resources';resources.mkdir(exist_ok=True)
     shutil.copytree(ROOT/'src/client/resources',resources,dirs_exist_ok=True)
+    (resources/'assets/packmod/conversion-target.json').write_text(json.dumps(dict(minecraft=mc,major=config['format'],minor=0,loader='fabric'),indent=2)+'\n')
     shutil.copyfile(ROOT/'LICENSE',resources/'LICENSE')
     shutil.copyfile(ROOT/'NOTICE.md',resources/'NOTICE.md')
     meta=json.loads((ROOT/'src/main/resources/fabric.mod.json').read_text())
-    meta['version']='0.4.0';meta['depends'].update(minecraft=mc,java='>='+str(config['java']),fabricloader='>=0.16.14')
+    meta['version']=MOD_VERSION;meta['depends'].update(minecraft=mc,java='>='+str(config['java']),fabricloader='>=0.16.14')
     if pose:
         meta['depends'].pop('fabric-api');meta['depends']['fabric']='*'
     (resources/'fabric.mod.json').write_text(json.dumps(meta,indent=2)+'\n')
-    (resources/'packmod.client.mixins.json').write_text(json.dumps(dict(required=True,package='com.embers.packmod.mixin',compatibilityLevel='JAVA_'+str(config['java']),client=['PackSelectionRefresh','ScreenWidgets']+(['EntryPack'] if pose else []),injectors=dict(defaultRequire=1)),indent=2)+'\n')
+    (resources/'packmod.client.mixins.json').write_text(json.dumps(dict(required=True,package='com.embers.packmod.mixin',compatibilityLevel='JAVA_'+str(config['java']),client=['PackSelectionRefresh','ScreenWidgets','PackEntryConversionMixin']+(['EntryPack'] if pose else []),injectors=dict(defaultRequire=1)),indent=2)+'\n')
     print('Generated '+mc+' (Java '+str(config['java'])+'); '+str(len(frozen))+' frozen core files verified',flush=True)
 
 def widget_adapter(kind, imp, pose):

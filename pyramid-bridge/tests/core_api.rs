@@ -90,3 +90,47 @@ fn mislabeled_images_are_repaired_but_budget_and_corruption_still_reject() {
         }
     }
 }
+
+#[test]
+fn arom_keeps_mod_font_title_sprite_and_option_contracts() {
+    use std::io::{Cursor,Read};
+    let temp=tempfile::tempdir().unwrap();let root=temp.path();let input=root.join("legacy.zip");
+    let png=|width,height,color| {
+        let mut data=Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(width,height,image::Rgba(color)))
+            .write_to(&mut data,image::ImageOutputFormat::Png).unwrap();data.into_inner()
+    };
+    let title=png(548,138,[80,120,180,170]);let sprite=png(3,3,[47,81,170,255]);
+    let mut zip=zip::ZipWriter::new(fs::File::create(&input).unwrap());
+    for (name,bytes) in [
+        ("pack.mcmeta",br#"{"pack":{"pack_format":5,"description":"A-ROM contracts"}}"#.to_vec()),
+        ("assets/minecraft/font/default.json",br#"{"providers":[{"type":"space","advances":{" ":4}},{"type":"legacy_unicode","sizes":"minecraft:font/glyph_sizes.bin"}]}"#.to_vec()),
+        ("assets/test/font/custom.json",br#"{"providers":[{"type":"legacy_unicode"}]}"#.to_vec()),
+        ("assets/minecraft/textures/gui/title/minecraft.png",title.clone()),
+        ("assets/minecraft/textures/gui/widgets.png",png(256,256,[20,40,80,255])),
+        ("assets/minecraft/textures/gui/sprites/widget/button.png",sprite.clone()),
+        ("assets/minecraft/textures/item/alpha.png",png(1,1,[200,0,0,128])),
+    ] {
+        zip.start_file(name,zip::write::FileOptions::default()).unwrap();zip.write_all(&bytes).unwrap();
+    }
+    zip.finish().unwrap();let original=fs::read(&input).unwrap();
+    let plain=pyramid_core::convert(request(root,&input,"plain"));assert!(plain.success,"{:?}",plain.error);
+    let read=|output:&Path,name:&str| {
+        let mut zip=zip::ZipArchive::new(fs::File::open(output).unwrap()).unwrap();let mut data=Vec::new();
+        zip.by_name(name).unwrap().read_to_end(&mut data).unwrap();data
+    };
+    let output=plain.output.unwrap();
+    assert_eq!(read(&output,"assets/minecraft/textures/gui/title/minecraft.png"),title);
+    assert_eq!(read(&output,"assets/minecraft/textures/gui/sprites/widget/button.png"),sprite);
+    for namespace in ["minecraft","test"] {
+        let font:serde_json::Value=serde_json::from_slice(&read(&output,&format!("assets/{namespace}/font/{}.json",if namespace=="test" {"custom"} else {"default"}))).unwrap();
+        assert!(font["providers"].as_array().unwrap().iter().any(|v|v["id"]=="minecraft:include/unifont"));
+    }
+    let mut enabled=request(root,&input,"alpha");enabled.options.fix_alpha_layers=true;
+    let fixed=pyramid_core::convert(enabled);assert!(fixed.success,"{:?}",fixed.error);
+    assert!(fixed.report.tasks.iter().any(|t|t.name=="fix_alpha_layers_in_textures"&&t.success&&!t.skipped));
+    let before=image::load_from_memory(&read(&output,"assets/minecraft/textures/item/alpha.png")).unwrap().to_rgba8();
+    let after=image::load_from_memory(&read(&fixed.output.unwrap(),"assets/minecraft/textures/item/alpha.png")).unwrap().to_rgba8();
+    assert_eq!(before.get_pixel(0,0).0,[200,0,0,128]);assert_ne!(before,after);assert_eq!(after.get_pixel(0,0)[3],128);
+    assert_eq!(fs::read(&input).unwrap(),original);
+}

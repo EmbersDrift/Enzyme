@@ -1,0 +1,12 @@
+// Optional real-pack checks; does not install anything into the player's instance.
+allprojects {
+    afterEvaluate {
+        def source = sourceSets.findByName('compatibilityCheck') ?: sourceSets.findByName('conversionCheck')
+        if (source != null) tasks.register('userPackCheck', JavaExec) {
+            dependsOn source.classesTaskName
+            classpath = source.runtimeClasspath
+            mainClass = 'com.embers.packmod.UserPackRegressionCheck'
+            args providers.gradleProperty('userPackSource').get(), providers.gradleProperty('userPackTarget').get(), layout.buildDirectory.dir('user-pack-check').get().asFile.absolutePath, providers.gradleProperty('userPackPreset').getOrElse('conservative')
+        }
+    }
+}

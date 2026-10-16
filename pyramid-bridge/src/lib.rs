@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_imports, unused_variables)]
 
 // Conversion code and UImage templates are from 2-Pyramid (MIT).
-// Pinned upstream: 503a0859e3ab6bf09ed03f361b9335e5931a6d6d.
+// Pinned upstream: 812a7358536c28772cfda3541a83e83f9a2d8825 (2.200.0).
 #[macro_export]
 macro_rules! log_info { ($($arg:tt)*) => {{ eprintln!($($arg)*); }}; }
 #[macro_export]
@@ -15,11 +15,20 @@ macro_rules! log_error { ($($arg:tt)*) => {{ eprintln!($($arg)*); }}; }
 #[macro_export]
 macro_rules! log_debug { ($($arg:tt)*) => {{ if cfg!(debug_assertions) { eprintln!($($arg)*); } }}; }
 
-mod converters;
-mod hurray;
+mod arom;
+mod natives;
+mod native_run;
+mod task_registry;
+mod bedrock_convert;
+mod chest_region;
+mod color;
+mod pack;
+mod scale_factor;
+mod integration;
+#[cfg(test)] mod invoke_conversion;
+mod alpha_layers;
 mod image_utils;
 mod color_utils;
-mod invoke_conversion;
 pub mod reporting;
 mod runtime;
 mod overlays;
@@ -35,7 +44,7 @@ mod commands {
 
 use std::{path::PathBuf, sync::Mutex};
 pub use runtime::{ImageBudgetCheck, Options};
-pub const UPSTREAM_COMMIT: &str = "503a0859e3ab6bf09ed03f361b9335e5931a6d6d";
+pub const UPSTREAM_COMMIT: &str = "812a7358536c28772cfda3541a83e83f9a2d8825";
 pub const TARGETS: &[u32] = &[1,2,3,4,5,6,7,8,9,12,13,15,18,22,32,34,42,46,55,63,64,69,75,84,88,97];
 static CONVERSION: Mutex<()> = Mutex::new(());
 #[derive(serde::Deserialize)]
@@ -57,6 +66,7 @@ pub fn capabilities() -> serde_json::Value {
     serde_json::json!({"schema_version":1,"core_version":env!("CARGO_PKG_VERSION"),
         "os":std::env::consts::OS,"arch":std::env::consts::ARCH,
         "targets":TARGETS.iter().map(|m|serde_json::json!({"major":m,"max_minor":if *m==97 {1} else {0}})).collect::<Vec<_>>(),
+        "engine":"A-ROM","upstream_version":"2.200.0",
         "features":["progress","cancel","source_overlays","options","image_budget","shared_core"]})
 }
 pub fn failure(error: String) -> JobResult {
@@ -72,11 +82,11 @@ pub fn convert(request: Request) -> JobResult {
         if !TARGETS.contains(&request.target_major) || request.target_minor > if request.target_major==97 {1} else {0} {
             return Err("Unsupported target format; query --capabilities".into());
         }
-        converters::zip::set_cleanup_mode(converters::zip::CleanupMode::Sync);
+        pack::io::set_cleanup_mode(pack::io::CleanupMode::Sync);
         runtime::emit("validating_input", "");
         let before=reporting::inventory(&request.input)?;
         let pool=rayon::ThreadPoolBuilder::new().num_threads(request.options.workers).build().map_err(|e|e.to_string())?;
-        let output=pool.install(|| converters::version_converter::process_zip(
+        let output=pool.install(|| pack::version_converter::process_zip(
             request.input.to_str().ok_or("Invalid input path")?,request.target_major,None,1.0,None,
             Some(request.output_dir.to_str().ok_or("Invalid output path")?),request.options.fix_alpha_layers,request.options.adapt_shaders))?;
         runtime::check_cancel()?;
@@ -98,9 +108,9 @@ pub fn convert(request: Request) -> JobResult {
 /// Read-only version route preview; file-specific effects remain in the actual report.
 pub fn plan(source: u32, target: u32) -> Result<serde_json::Value,String> {
     if !TARGETS.contains(&source) || !TARGETS.contains(&target) {return Err("Unknown source or target format".into());}
-    let scheduler=hurray::scheduler::Scheduler::new();
+    let scheduler=arom::engine::scheduler::Scheduler::new();
     let path=scheduler.calculate_path(source,target).map_err(|e|e.to_string())?;
-    let mut tasks=scheduler.get_tasks_for_path_with_rules(&path,target);
+    let mut tasks=scheduler.plan(source,target).map_err(|e|e.to_string())?;
     if target>=34 {tasks.push("gui_surgeon".into());}
     Ok(serde_json::json!({"schema_version":1,"source":source,"target":target,"path":path,"tasks":tasks}))
 }

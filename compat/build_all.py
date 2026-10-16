@@ -1,7 +1,7 @@
 """Reproducible per-version build, optional UI audit, and checked delivery directory."""
 from pathlib import Path
 import argparse,hashlib,json,os,shutil,struct,subprocess,sys,zipfile
-from generate import ROOT,VERSIONS,generate
+from generate import ROOT,VERSIONS,MOD_VERSION,generate
 from toolchains import installation_paths
 
 def verify(mc,jar):
@@ -11,7 +11,10 @@ def verify(mc,jar):
     with zipfile.ZipFile(jar) as z:
         meta=json.loads(z.read('fabric.mod.json'))
         assert meta['depends']['minecraft']==mc and meta['depends']['java']=='>='+str(spec['java'])
-        assert meta['version']=='0.4.0'
+        assert meta['version']==MOD_VERSION
+        assert meta['icon']=='assets/packmod/icon.png'
+        assert z.read(meta['icon'])==(ROOT/'src/client/resources/assets/packmod/icon.png').read_bytes()
+        assert json.loads(z.read('assets/packmod/conversion-target.json'))==dict(minecraft=mc,major=spec['format'],minor=0,loader='fabric')
         assert meta['name']=='Enzyme' and meta['license']=='MIT' and 'LICENSE' in z.namelist()
         assert z.read('LICENSE')==(ROOT/'LICENSE').read_bytes()
         for name in z.namelist():
@@ -35,17 +38,20 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser()
     game=parser.add_mutually_exclusive_group();game.add_argument('--audit',action='store_true');game.add_argument('--reuse-audit',action='store_true')
     production=parser.add_mutually_exclusive_group();production.add_argument('--production-audit',action='store_true');production.add_argument('--reuse-production-audit',action='store_true')
-    parser.add_argument('--versions',nargs='+',choices=VERSIONS,default=list(VERSIONS));args=parser.parse_args()
+    parser.add_argument('--versions',nargs='+',choices=VERSIONS,default=list(VERSIONS))
+    parser.add_argument('--collect-only',action='store_true',help='Validate existing release JARs and matching audit evidence without rebuilding.')
+    args=parser.parse_args()
     paths=installation_paths()
     env=os.environ.copy();env.setdefault('GRADLE_USER_HOME',str(Path.home()/'.gradle'))
     records=[];delivery=ROOT/'build/compat-delivery';delivery.mkdir(exist_ok=True)
     for mc in args.versions:
         if args.audit:subprocess.run([sys.executable,str(ROOT/'compat/run_audit.py'),mc],cwd=ROOT,env=env,check=True)
-        generate(mc)
+        if not args.collect_only:generate(mc)
         # Audit/probe compilation shares the output directory. Clear incremental
         # leftovers before release rather than relying on deleted-source cleanup.
-        subprocess.run([str(ROOT/'gradlew.bat'),'-p','compat','-Pmc='+mc,'-Porg.gradle.java.installations.paths='+paths,'clean','build','--console=plain'],cwd=ROOT,env=env,check=True)
-        jar=ROOT/'build/compat'/mc/'libs'/('enzyme-'+mc+'-0.4.0.jar')
+        if not args.collect_only:
+            subprocess.run([str(ROOT/'gradlew.bat'),'-p','compat','-Pmc='+mc,'-Porg.gradle.java.installations.paths='+paths,'clean','build','--console=plain'],cwd=ROOT,env=env,check=True)
+        jar=ROOT/'build/compat'/mc/'libs'/('enzyme-'+mc+'-'+MOD_VERSION+'.jar')
         record=verify(mc,jar);record.update(game_audit_passed=False,native_upgrade_downgrade_check_passed=True)
         if args.audit or args.reuse_audit:
             run=Path((ROOT/'build/compat-runs'/mc/'last-audit.txt').read_text()).resolve()
@@ -63,6 +69,8 @@ if __name__=='__main__':
             assert run.is_relative_to((ROOT/'build/compat-production-runs'/mc).resolve())
             assert proof['production_jar_audit_passed'] and (run/'standalone-pass.txt').read_text().startswith('PASS:')
             record.update(production_jar_audit_passed=True,production_audit_directory=str(run))
+            record['ui_clarity_passed']=proof.get('ui_clarity_passed',False)
         records.append(record)
-    (delivery/'verification.json').write_text(json.dumps(dict(core_version='0.2.2',core_changed=False,platform='windows-x86_64',versions=records),indent=2)+'\n')
+    baseline=json.loads((ROOT/'tools/upstream/core-baseline.json').read_text())
+    (delivery/'verification.json').write_text(json.dumps(dict(mod_version=MOD_VERSION,core_version=baseline['core_version'],core_changed=bool(baseline.get('previous_core_version')),core_baseline_verified=True,upstream_commit=baseline['upstream_commit'],platform='windows-x86_64',versions=records),indent=2)+'\n')
     print('Checked delivery: '+str(delivery))

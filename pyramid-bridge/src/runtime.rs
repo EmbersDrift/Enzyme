@@ -16,7 +16,7 @@ impl Default for Options {
         adapt_shaders: false, fix_alpha_layers: false, flatten_overlays: true,
         workers: 2, memory_budget_mb: 256 } }
 }
-struct Runtime { options: Options, worker_limit: usize, templates: Option<PathBuf>, cancel: Option<PathBuf>, events: Option<File>, done: usize, total: usize }
+struct Runtime { options: Options, worker_limit: usize, templates: Option<PathBuf>, cancel: Option<PathBuf>, events: Option<File>, done: usize, total: usize, source_root: Option<PathBuf>, target: u32 }
 static STATE: Mutex<Option<Runtime>> = Mutex::new(None);
 pub fn configure(options: Options, cancel: Option<PathBuf>, events: Option<PathBuf>, templates: Option<PathBuf>) -> Result<(), String> {
     if !(1..=4).contains(&options.workers) || !(128..=1024).contains(&options.memory_budget_mb) {
@@ -24,12 +24,14 @@ pub fn configure(options: Options, cancel: Option<PathBuf>, events: Option<PathB
     }
     let events = events.map(File::create).transpose().map_err(|e| e.to_string())?;
     let worker_limit = options.workers;
-    *STATE.lock().unwrap() = Some(Runtime { options, worker_limit, templates, cancel, events, done: 0, total: 0 }); Ok(())
+    *STATE.lock().unwrap() = Some(Runtime { options, worker_limit, templates, cancel, events, done: 0, total: 0, source_root: None, target: 0 }); Ok(())
 }
 pub fn finish() { *STATE.lock().unwrap() = None; }
 pub fn options() -> Option<Options> { STATE.lock().unwrap().as_ref().map(|s| s.options.clone()) }
 pub fn conversion_workers() -> Option<usize> { STATE.lock().unwrap().as_ref().map(|s| s.worker_limit) }
 pub fn templates() -> Option<PathBuf> { STATE.lock().unwrap().as_ref().and_then(|s|s.templates.clone()) }
+pub fn source_root() -> Option<PathBuf> { STATE.lock().unwrap().as_ref().and_then(|s|s.source_root.clone()) }
+pub fn set_source_root(root: &Path) { if let Some(s)=STATE.lock().unwrap().as_mut() { s.source_root=Some(root.to_path_buf()); } }
 pub fn cancelled() -> bool { STATE.lock().unwrap().as_ref().and_then(|s| s.cancel.as_ref()).is_some_and(|p| p.exists()) }
 pub fn check_cancel() -> Result<(), String> { if cancelled() { Err("Conversion cancelled".into()) } else { Ok(()) } }
 pub fn emit(stage: &str, task: &str) {
@@ -43,6 +45,8 @@ pub fn task_start(name: &str) -> Result<(), String> { check_cancel()?; emit("tas
 pub fn task_done(name: &str) { if let Some(s) = STATE.lock().unwrap().as_mut() { s.done += 1; } emit("tasks", name); }
 pub fn skip_task(name: &str, root: &Path) -> bool {
     let Some(o) = options() else { return false; };
+    let staging = source_root();
+    let root = staging.as_deref().unwrap_or(root);
     if name == "adapt_java_shaders" && !o.adapt_shaders {
         if root.join("assets/minecraft/shaders").exists() { crate::reporting::warning("shaders_preserved", "Shader migration is disabled; shader compatibility needs review."); }
         return true;
@@ -86,6 +90,30 @@ fn image_peak(largest_pixels: u64, workers: usize, budget: u64) -> (usize, u64, 
     (effective, peak, peak <= budget)
 }
 
+pub(crate) fn admit_images(count: usize, largest: &(u64,u32,u32,String), phase: &str) -> Result<u64,String> {
+    let Some(o)=options() else { return Ok(u64::MAX); };
+    let budget = o.memory_budget_mb * 1024 * 1024;
+    let (workers, peak, fits) = image_peak(largest.0, o.workers, budget);
+    let accepted = fits && largest.0 <= 16_777_216;
+    crate::reporting::image_budget_check(ImageBudgetCheck {
+        phase: phase.into(), image_count: count, largest_image: largest.3.clone(),
+        largest_width: largest.1, largest_height: largest.2, largest_rgba_bytes: largest.0.saturating_mul(4),
+        budget_bytes: budget, cache_reserve_bytes: budget / 4, estimated_peak_bytes: peak,
+        requested_workers: o.workers, effective_workers: workers, accepted,
+    });
+    if largest.0 > 16_777_216 {
+        return Err(format!("Image exceeds 16,777,216 pixels: {} ({}x{})", largest.3, largest.1, largest.2));
+    }
+    if !fits {
+        return Err(format!("Image budget exceeded by {} ({}x{}): estimated single-worker peak {:.1} MiB including cache, selected budget {} MiB",
+            largest.3, largest.1, largest.2, peak as f64 / 1048576.0, o.memory_budget_mb));
+    }
+    if let Some(state) = STATE.lock().unwrap().as_mut() { state.worker_limit = state.worker_limit.min(workers); }
+    crate::log_info!("Image budget [{phase}]: {count} images, largest {} ({}x{}), peak estimate {:.1}/{} MiB, workers {}/{}",
+        largest.3, largest.1, largest.2, peak as f64 / 1048576.0, o.memory_budget_mb, workers, o.workers);
+    Ok(budget)
+}
+
 pub fn preflight_images(root: &Path, phase: &str) -> Result<(), String> {
     let Some(o) = options() else { return Ok(()); };
     let mut count = 0;
@@ -113,23 +141,7 @@ pub fn preflight_images(root: &Path, phase: &str) -> Result<(), String> {
         }
         if pixels > largest.0 { largest = (pixels, w, h, name); }
     }
-    let budget = o.memory_budget_mb * 1024 * 1024;
-    let (workers, peak, fits) = image_peak(largest.0, o.workers, budget);
-    let accepted = fits && largest.0 <= 16_777_216;
-    crate::reporting::image_budget_check(ImageBudgetCheck {
-        phase: phase.into(), image_count: count, largest_image: largest.3.clone(),
-        largest_width: largest.1, largest_height: largest.2, largest_rgba_bytes: largest.0.saturating_mul(4),
-        budget_bytes: budget, cache_reserve_bytes: budget / 4, estimated_peak_bytes: peak,
-        requested_workers: o.workers, effective_workers: workers, accepted,
-    });
-    if largest.0 > 16_777_216 {
-        return Err(format!("Image exceeds 16,777,216 pixels: {} ({}x{})", largest.3, largest.1, largest.2));
-    }
-    if !fits {
-        return Err(format!("Image budget exceeded by {} ({}x{}): estimated single-worker peak {:.1} MiB including cache, selected budget {} MiB",
-            largest.3, largest.1, largest.2, peak as f64 / 1048576.0, o.memory_budget_mb));
-    }
-    if let Some(state) = STATE.lock().unwrap().as_mut() { state.worker_limit = state.worker_limit.min(workers); }
+    let budget=admit_images(count,&largest,phase)?;
     for (path, name, format) in mislabeled_pngs {
         check_cancel()?;
         normalize_png(&path, budget)?;
@@ -137,8 +149,7 @@ pub fn preflight_images(root: &Path, phase: &str) -> Result<(), String> {
         crate::reporting::repair("image_encoding_normalized", &name, &detail);
         crate::log_info!("Image encoding repaired: {name}: {detail}");
     }
-    crate::log_info!("Image budget [{phase}]: {count} images, largest {} ({}x{}), peak estimate {:.1}/{} MiB, workers {}/{}",
-        largest.3, largest.1, largest.2, peak as f64 / 1048576.0, o.memory_budget_mb, workers, o.workers);
+
     Ok(())
 }
 
@@ -217,3 +228,6 @@ mod tests {
         assert_eq!(image::open(&path).unwrap().to_rgb8(), original);
     }
 }
+
+pub fn target() -> Option<u32> { STATE.lock().unwrap().as_ref().map(|s|s.target) }
+pub fn set_target(target: u32) { if let Some(s)=STATE.lock().unwrap().as_mut() { s.target=target; } }

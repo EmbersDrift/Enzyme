@@ -49,7 +49,10 @@ final class PyramidConverter {
             if (name.toLowerCase(Locale.ROOT).endsWith(".zip") || name.toLowerCase(Locale.ROOT).endsWith(".mcpack"))
                 name = name.substring(0, name.lastIndexOf('.'));
             Path staged = input.resolve(name + ".zip");
-            stage(info, staged, control);
+            var stagingRepairs = stage(info, staged, control);
+            if (!stagingRepairs.isEmpty()) Files.writeString(job.resolve("staging-repairs.json"),
+                    new com.google.gson.Gson().toJson(stagingRepairs), StandardCharsets.UTF_8);
+            var existingGenerated = options.generateMissing() ? GeneratedResourceReview.snapshot(staged) : java.util.List.<GeneratedResourceReview.Existing>of();
             control.check();
             Path output = job.resolve("output"), temp = job.resolve("temp");
             Files.createDirectories(output); Files.createDirectories(temp);
@@ -105,6 +108,11 @@ final class PyramidConverter {
             if (!Files.isRegularFile(resultFile)) throw new IOException("2-Pyramid did not return a result; see " + job.resolve("conversion.log"));
             if (Files.size(resultFile) > 16 * 1024 * 1024) throw new IOException("Conversion report exceeds 16 MiB");
             JsonObject result = JsonParser.parseString(Files.readString(resultFile)).getAsJsonObject();
+            if (!stagingRepairs.isEmpty()) {
+                if (!result.has("repairs")) result.add("repairs", new com.google.gson.JsonArray());
+                for (var repair : stagingRepairs) result.getAsJsonArray("repairs").add(new com.google.gson.Gson().toJsonTree(repair));
+                Files.writeString(resultFile, result.toString(), StandardCharsets.UTF_8);
+            }
             ConversionReport report;
             try {
                 report = ConversionReport.parse(result).withWarnings(info.warnings().stream()
@@ -114,8 +122,22 @@ final class PyramidConverter {
             Path converted = Path.of(result.get("output").getAsString()).toAbsolutePath().normalize();
             if (!converted.startsWith(output.toAbsolutePath().normalize()) || !Files.isRegularFile(converted))
                 throw new IOException("Invalid conversion output path");
+            var compatibility=PackCompatibility.apply(converted,target,options,control);
+            if(!compatibility.repairs().isEmpty()||!compatibility.warnings().isEmpty()) {
+                var warnings=new java.util.ArrayList<>(report.warnings());warnings.addAll(compatibility.warnings());
+                var repairs=new java.util.ArrayList<>(report.repairs());repairs.addAll(compatibility.repairs());
+                var changes=compatibility.added()+compatibility.modified()>0?PackCompatibility.changes(staged,converted,control):report.changes();
+                report=new ConversionReport(warnings,changes,report.completedTasks(),repairs);
+                result.add("repairs",new com.google.gson.Gson().toJsonTree(repairs));
+                result.add("changes",new com.google.gson.Gson().toJsonTree(changes));
+            }
             PackInspector.Info verified = PackInspector.inspect(converted);
             if (verified == null || !verified.supports(target)) throw new IOException("Converted pack does not support the current client's resource format");
+            var generationWarnings = GeneratedResourceReview.changed(existingGenerated, result, converted);
+            if (!generationWarnings.isEmpty()) {
+                var warnings = new java.util.ArrayList<>(report.warnings()); warnings.addAll(generationWarnings);
+                report = new ConversionReport(warnings, report.changes(), report.completedTasks(), report.repairs());
+            }
             control.check();
             progress.accept("pack_conversion.installing");
             control.check();
@@ -267,8 +289,9 @@ final class PyramidConverter {
         for (String part : normalized.split("/")) if (part.equals("..")) throw new IOException("Unsafe ZIP entry: " + name);
         return normalized;
     }
-    private static void stage(PackInspector.Info info, Path destination, ConversionControl control) throws IOException {
+    private static java.util.List<ConversionReport.Repair> stage(PackInspector.Info info, Path destination, ConversionControl control) throws IOException {
         long[] size = {0}; int[] entries = {0};
+        var repairs = new java.util.ArrayList<ConversionReport.Repair>();
         try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(destination))) {
             // Staging is short-lived: avoid recompressing thousands of textures before native extraction.
             out.setLevel(java.util.zip.Deflater.NO_COMPRESSION);
@@ -278,7 +301,7 @@ final class PyramidConverter {
                     while (files.hasNext()) {
                         Path file = files.next();
                         String relative = info.path().relativize(file).toString().replace('\\', '/');
-                        try (InputStream input = Files.newInputStream(file)) { add(out, relative, input, info, size, entries, control); }
+                        try (InputStream input = Files.newInputStream(file)) { add(out, relative, input, info, size, entries, control, repairs); }
                     }
                 }
             } else {
@@ -287,14 +310,15 @@ final class PyramidConverter {
                     while (files.hasMoreElements()) {
                         ZipEntry entry = files.nextElement();
                         if (entry.isDirectory()) continue;
-                        try (InputStream input = zip.getInputStream(entry)) { add(out, entry.getName(), input, info, size, entries, control); }
+                        try (InputStream input = zip.getInputStream(entry)) { add(out, entry.getName(), input, info, size, entries, control, repairs); }
                     }
                 }
             }
         }
+        return java.util.List.copyOf(repairs);
     }
     private static void add(ZipOutputStream out, String name, InputStream input, PackInspector.Info info,
-                            long[] size, int[] count, ConversionControl control) throws IOException {
+                            long[] size, int[] count, ConversionControl control, java.util.List<ConversionReport.Repair> repairs) throws IOException {
         control.check();
         name = safeName(name);
         if (!info.prefix().isEmpty() && !name.startsWith(info.prefix())) throw new IOException("Multiple pack roots or files outside selected root; unpack this pack first");
@@ -302,8 +326,22 @@ final class PyramidConverter {
         String prefix = info.prefix();
         if (!prefix.isEmpty() && name.startsWith(prefix)) name = name.substring(prefix.length());
         String metadataName = info.metadata().substring(info.prefix().length());
-        if (!info.bedrock() && name.equals(metadataName)) name = "pack.mcmeta";
+        boolean metadata = !info.bedrock() && name.equals(metadataName);
+        if (metadata) name = "pack.mcmeta";
         out.putNextEntry(new ZipEntry(name));
+        if (metadata) {
+            byte[] original = input.readNBytes(PackInspector.MAX_METADATA + 1);
+            if (original.length > PackInspector.MAX_METADATA) throw new IOException("pack.mcmeta exceeds 1 MiB");
+            var normalized = PackMetadataStaging.normalize(original);
+            size[0] += normalized.bytes().length;
+            if (size[0] > MAX_BYTES) throw new IOException("Resource pack exceeds 500 MiB uncompressed");
+            control.check();
+            out.write(normalized.bytes());
+            if (normalized.escapedControls() > 0) repairs.add(new ConversionReport.Repair("metadata_controls_escaped", name,
+                    "Escaped " + normalized.escapedControls() + " literal JSON string control characters in the staged copy; decoded values preserved."));
+            out.closeEntry();
+            return;
+        }
         byte[] buffer = new byte[65536]; int bytes;
         while ((bytes = input.read(buffer)) != -1) {
             control.check();

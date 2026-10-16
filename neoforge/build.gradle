@@ -1,0 +1,94 @@
+plugins {
+    id 'net.neoforged.moddev' version '2.0.148' apply false
+    id 'net.neoforged.moddev.legacyforge' version '2.0.148' apply false
+}
+def mc = providers.gradleProperty('mc').get()
+def spec = new groovy.json.JsonSlurper().parse(file('versions.json'))[mc]
+if (spec == null) throw new GradleException('Unsupported Minecraft target: ' + mc)
+apply plugin: spec.legacy ? 'net.neoforged.moddev.legacyforge' : 'net.neoforged.moddev'
+def sharedProperties = new Properties()
+file('../gradle.properties').withInputStream { sharedProperties.load(it) }
+version = sharedProperties.getProperty('version')
+group = 'com.embers'
+base { archivesName = 'enzyme-neoforge-' + mc }
+layout.buildDirectory = layout.projectDirectory.dir('../build/neoforge/' + mc)
+java { withSourcesJar(); toolchain.languageVersion = JavaLanguageVersion.of(spec.java == 25 ? 26 : spec.java) }
+tasks.withType(JavaCompile).configureEach { options.release = spec.java as int }
+sourceSets {
+    main {
+        java.srcDirs = ['../build/neoforge-generated/' + mc + '/java']
+        resources.srcDirs = ['../build/neoforge-generated/' + mc + '/resources']
+    }
+    compatibilityCheck { java.srcDirs = ['../compat/checks', '../tools/regressions'] }
+    audit {
+        java.srcDirs = ['../build/neoforge-generated/' + mc + '/audit-java']
+        resources.srcDirs = ['../build/neoforge-generated/' + mc + '/audit-resources']
+    }
+}
+def platform = spec.legacy ? legacyForge : neoForge
+if (spec.legacy) {
+    legacyForge.enable { neoForgeVersion = spec.neoforge; disableRecompilation = true }
+    dependencies { annotationProcessor 'org.spongepowered:mixin:0.8.5:processor' }
+    mixin { add sourceSets.main, 'packmod.refmap.json'; config 'packmod.client.mixins.json' }
+    tasks.named('jar') { manifest.attributes('MixinConfigs': 'packmod.client.mixins.json') }
+} else {
+    neoForge.enable { version = spec.neoforge; disableRecompilation = true }
+}
+platform.with {
+    runs {
+        client {
+            client()
+            gameDirectory = file(providers.gradleProperty('auditRunDir').getOrElse('../build/neoforge-runs/' + mc))
+        }
+    }
+    mods { packmod { sourceSet sourceSets.main } }
+}
+sourceSets.compatibilityCheck.compileClasspath += sourceSets.main.output + configurations.compileClasspath
+sourceSets.compatibilityCheck.runtimeClasspath += sourceSets.main.output + configurations.runtimeClasspath
+sourceSets.audit.compileClasspath += sourceSets.main.output + configurations.compileClasspath
+tasks.register('compatibilityCheck', JavaExec) {
+    dependsOn 'compatibilityCheckClasses'
+    classpath = sourceSets.compatibilityCheck.runtimeClasspath
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(spec.java == 25 ? 26 : spec.java) }
+    mainClass = 'com.embers.packmod.VersionConversionCheck'
+    args layout.buildDirectory.dir('conversion-check').get().asFile.absolutePath, spec.format.toString(), mc
+}
+tasks.named('check') { dependsOn 'compatibilityCheck' }
+def auditBytes = sourceSets.audit.output.classesDirs
+if (spec.legacy) {
+    def rawAudit = tasks.register('auditBytecode', Jar) {
+        dependsOn 'auditClasses'
+        archiveFileName = 'enzyme-audit-bytecode-' + mc + '.jar'
+        from(sourceSets.audit.output) { include 'com/embers/packmod/PackStandaloneAudit*.class' }
+    }
+    tasks.register('reobfAuditBytecode', net.neoforged.moddevgradle.legacyforge.tasks.RemapJar) {
+        input = rawAudit.flatMap { it.archiveFile }
+        libraries.from(sourceSets.audit.compileClasspath)
+        obfuscation.configureNamedToSrgOperation(remapOperation)
+        destinationDirectory = layout.buildDirectory.dir('audit-mapped')
+        archiveFileName = 'audit-srg.jar'
+    }
+    auditBytes = providers.provider { zipTree(tasks.named('reobfAuditBytecode').get().archiveFile.get().asFile) }
+}
+def probe = tasks.register('probeJar', Jar) {
+    dependsOn 'auditClasses'
+    if (spec.legacy) dependsOn 'reobfAuditBytecode'
+    archiveFileName = 'enzyme-neoforge-probe-' + mc + '.jar'
+    from(sourceSets.audit.output) { exclude 'com/embers/packmod/PackStandaloneAudit*.class' }
+    from(auditBytes) {
+        include 'com/embers/packmod/PackStandaloneAudit*.class'
+        eachFile { path = 'META-INF/enzyme-audit/' + name + '.bin' }
+        includeEmptyDirs = false
+    }
+}
+if (spec.legacy) {
+    probe.configure { destinationDirectory = layout.buildDirectory.dir('devlibs') }
+    def mappedProbe = tasks.register('reobfProbeJar', net.neoforged.moddevgradle.legacyforge.tasks.RemapJar) {
+        input = probe.flatMap { it.archiveFile }
+        libraries.from(sourceSets.audit.compileClasspath)
+        obfuscation.configureNamedToSrgOperation(remapOperation)
+        destinationDirectory = layout.buildDirectory.dir('libs')
+        archiveFileName = 'enzyme-neoforge-probe-' + mc + '.jar'
+    }
+    probe.configure { finalizedBy mappedProbe }
+}

@@ -1,0 +1,8 @@
+{
+  "1.20.1": {"java":17,"format":15,"neoforge":"1.20.1-47.1.106","legacy":true},
+  "1.20.6": {"java":21,"format":32,"neoforge":"20.6.144"},
+  "1.21.8": {"java":21,"format":64,"neoforge":"21.8.57"},
+  "1.21.10": {"java":21,"format":69,"neoforge":"21.10.64"},
+  "1.21.11": {"java":21,"format":75,"neoforge":"21.11.48"},
+  "26.2": {"java":25,"format":88,"neoforge":"26.2.0.93"}
+}

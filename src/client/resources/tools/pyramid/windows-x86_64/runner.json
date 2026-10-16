@@ -2,13 +2,14 @@
   "schema_version": 1,
   "platform": "windows-x86_64",
   "executable": "embers-pyramid.exe",
-  "binary_sha256": "04e75480a92d3f831feecfb20c4c8ed89dd9eda116c00280b630783a2fde8b85",
-  "core_baseline_sha256": "f25e29e947dadd09d94a7728ed05511e367e03dc920366f90a4bc40b66c44ac7",
-  "core_version": "0.2.2",
-  "upstream_commit": "503a0859e3ab6bf09ed03f361b9335e5931a6d6d",
+  "binary_sha256": "d95ec2499a312568ee2b9f3c558f491795ab50d0861f39a631fa41995dce051a",
+  "core_baseline_sha256": "2d7ad3c9193901d2ed57f2f23e723f7e0abc069dc9be3a82c65d847cf90a19ff",
+  "core_version": "0.3.0",
+  "upstream_commit": "812a7358536c28772cfda3541a83e83f9a2d8825",
   "capabilities": {
     "arch": "x86_64",
-    "core_version": "0.2.2",
+    "core_version": "0.3.0",
+    "engine": "A-ROM",
     "features": [
       "progress",
       "cancel",
@@ -124,7 +125,8 @@
         "major": 97,
         "max_minor": 1
       }
-    ]
+    ],
+    "upstream_version": "2.200.0"
   },
   "templates_sha256": "eec371ba2ba0d2b81f8b33a6f45111cfb071fd49cf9742d8f5c9f3e49b027fdc"
 }

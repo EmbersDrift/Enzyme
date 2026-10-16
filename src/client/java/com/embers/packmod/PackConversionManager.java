@@ -58,8 +58,12 @@ final class PackConversionManager {
         packDirectory = client.getResourcePackDirectory().toAbsolutePath().normalize();
         tools = client.gameDirectory.toPath().resolve("packmod-tools/pyramid").toAbsolutePath().normalize();
         stateFile = FabricLoader.getInstance().getConfigDir().resolve("packmod-pack-conversions.json");
-        var format = SharedConstants.getCurrentVersion().packVersion(PackType.CLIENT_RESOURCES);
-        target = new PackInspector.Version(format.major(), format.minor());
+        target = ConversionTarget.current();
+        try { ConversionTarget.verify(target); }
+        catch (IllegalStateException error) {
+            PackModClient.LOGGER.error("Enzyme conversion disabled: target does not match this Minecraft version", error);
+            return;
+        }
         optionsFile = FabricLoader.getInstance().getConfigDir().resolve("packmod-conversion-options.json");
         options = ConversionOptions.read(optionsFile);
         try {
@@ -84,13 +88,15 @@ final class PackConversionManager {
         ClientLifecycleEvents.CLIENT_STOPPING.register(ignored -> { if(control!=null)control.cancel(); worker.shutdownNow(); });
         ScreenEvents.AFTER_INIT.register((minecraft, screen, width, height) -> {
             if (screen instanceof PackSelectionScreen) {
-                Screens.getWidgets(screen).add(net.minecraft.client.gui.components.Button.builder(
-                        AeroUi.ui("Check Pack Versions"), button -> queuedCheck = minecraft.gui.screen())
-                        .bounds(width - 117, 7, 108, 18).build());
-                Screens.getWidgets(screen).add(net.minecraft.client.gui.components.Button.builder(
-                        AeroUi.ui("Conversion Results"), button -> showResults(screen)).bounds(width - 229, 7, 108, 18).build());
-                Screens.getWidgets(screen).add(net.minecraft.client.gui.components.Button.builder(
-                        AeroUi.ui("Conversion History"), button -> minecraft.gui.setScreen(new PackHistoryScreen(screen))).bounds(9, 7, 108, 18).build());
+                int buttonWidth = Math.min(108, (width - 30) / 4);
+                Screens.getWidgets(screen).add(new NativeButton(width-10-buttonWidth,7,buttonWidth,20,
+                        "Check Pack Versions", button -> queuedCheck = minecraft.gui.screen()));
+                Screens.getWidgets(screen).add(new NativeButton(width-16-buttonWidth*2,7,buttonWidth,20,
+                        "Conversion Results", button -> showResults(screen)));
+                Screens.getWidgets(screen).add(new NativeButton(10,7,buttonWidth,20,
+                        "Conversion History", button -> minecraft.gui.setScreen(new PackHistoryScreen(screen))));
+                Screens.getWidgets(screen).add(new NativeButton(16+buttonWidth,7,buttonWidth,20,
+                        "Conversion Settings", button -> minecraft.gui.setScreen(new ConversionOptionsScreen(screen))));
             }
         });
     }
@@ -232,7 +238,17 @@ final class PackConversionManager {
         return protectedIds.contains("file/" + candidate.info.path().getFileName());
     }
 
-    static void requestCheck(Screen parent) {
+    static Path promptSource(String id) {
+        if (worker == null || packDirectory == null || id == null || !id.startsWith("file/")) return null;
+        try {
+            Path path = packDirectory.resolve(id.substring(5)).normalize();
+            return packDirectory.equals(path.getParent()) && PackConversionFiles.candidate(path) ? path : null;
+        } catch (java.nio.file.InvalidPathException error) { return null; }
+    }
+
+    static void requestCheck(Screen parent) { requestCheck(parent, null); }
+
+    static void requestCheck(Screen parent, Path preferred) {
         if (busy || packScreen(parent) == null) return;
         busy = true;
         boolean saveFirstVisit = !automaticCheckDone;
@@ -244,7 +260,7 @@ final class PackConversionManager {
         worker.execute(() -> {
             if (saveFirstVisit) saveState();
             Report report = scan();
-            client.execute(() -> { busy = false; popup.detected(report, protectedIds(parent)); });
+            client.execute(() -> { busy = false; popup.detected(report, protectedIds(parent)); popup.selectOnly(preferred); });
         });
     }
 
