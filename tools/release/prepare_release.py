@@ -53,6 +53,7 @@ def main():
     with zipfile.ZipFile(source) as archive:
         meta = json.loads(archive.read('fabric.mod.json'))
         assert meta['name'] == 'Enzyme' and meta['version'] == MOD_VERSION and meta['license'] == 'MIT'
+        assert meta['authors']==['EmbersDrift']
         assert meta['depends']['minecraft'] == '~26.2' and meta['depends']['java'] == '>=25'
         assert archive.read('LICENSE') == (ROOT / 'LICENSE').read_bytes()
         assert b'PackStandaloneAudit' not in archive.read('com/embers/packmod/PackModClient.class')

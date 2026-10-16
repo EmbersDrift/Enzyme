@@ -76,7 +76,7 @@ version="{MOD_VERSION}"
 displayName="Enzyme"
 logoFile="assets/packmod/icon.png"
 displayURL="https://github.com/EmbersDrift/Enzyme"
-authors="EmbersDrift, 2-Pyramid Studio"
+authors="EmbersDrift"
 description="Inspect and convert resource packs for this Minecraft version."
 [[mixins]]
 config="packmod.client.mixins.json"

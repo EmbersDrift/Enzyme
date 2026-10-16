@@ -12,6 +12,7 @@ def verify(mc,jar):
         meta=json.loads(z.read('fabric.mod.json'))
         assert meta['depends']['minecraft']==mc and meta['depends']['java']=='>='+str(spec['java'])
         assert meta['version']==MOD_VERSION
+        assert meta['authors']==['EmbersDrift']
         assert meta['icon']=='assets/packmod/icon.png'
         assert z.read(meta['icon'])==(ROOT/'src/client/resources/assets/packmod/icon.png').read_bytes()
         assert json.loads(z.read('assets/packmod/conversion-target.json'))==dict(minecraft=mc,major=spec['format'],minor=0,loader='fabric')

@@ -12,6 +12,7 @@ def verify(mc,jar):
         assert z.testzip() is None
         meta=tomllib.loads(z.read('META-INF/'+('mods.toml' if spec.get('legacy') else 'neoforge.mods.toml')).decode())
         assert meta['license']=='MIT' and meta['mods'][0]['modId']=='packmod' and meta['mods'][0]['version']==MOD_VERSION
+        assert meta['mods'][0]['authors']=='EmbersDrift'
         assert meta['mods'][0]['logoFile']=='assets/packmod/icon.png'
         assert z.read(meta['mods'][0]['logoFile'])==(ROOT/'src/client/resources/assets/packmod/icon.png').read_bytes()
         deps=meta['dependencies']['packmod'];assert next(d for d in deps if d['modId']=='minecraft')['versionRange']=='['+mc+']'

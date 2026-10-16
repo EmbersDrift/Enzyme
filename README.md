@@ -1,6 +1,14 @@
 # Enzyme
 
+**MOD 制作与维护：EmbersDrift**
+
 在 Minecraft 原版资源包界面中检查版本、预览转换任务并批量转换资源包，支持 Fabric 和 NeoForge。转换核心来自 [2-Pyramid](https://github.com/realLivedInCorner/2-Pyramid)，项目采用与上游一致的 [MIT 许可证](LICENSE)。
+
+## 界面演示
+
+![Enzyme 资源包选择与转换界面](https://raw.githubusercontent.com/EmbersDrift/Enzyme/main/docs/images/pack-selection.png)
+
+更多游戏内截图及项目介绍见 [Modrinth 发布文案](https://github.com/EmbersDrift/Enzyme/blob/main/MODRINTH.md)。
 
 ## 下载与安装
 

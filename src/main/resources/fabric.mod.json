@@ -6,8 +6,7 @@
   "icon": "assets/packmod/icon.png",
   "description": "Inspect and convert Minecraft resource packs using the 2-Pyramid core.",
   "authors": [
-    "EmbersDrift",
-    "Embers Client contributors"
+    "EmbersDrift"
   ],
   "license": "MIT",
   "contact": {

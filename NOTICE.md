@@ -2,6 +2,10 @@
 
 Enzyme is distributed under the MIT license in [LICENSE](LICENSE).
 
+The Enzyme MOD is created and maintained by EmbersDrift.
+The upstream and third-party attributions below identify the sources of
+components and artwork and remain separate from the MOD author metadata.
+
 The conversion core and UImage templates derive from
 [realLivedInCorner/2-Pyramid](https://github.com/realLivedInCorner/2-Pyramid),
 version 2.200.0, commit `812a7358536c28772cfda3541a83e83f9a2d8825`.
